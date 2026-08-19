@@ -1,0 +1,15 @@
+# Example RAG SDK configuration.
+project:
+  name: api-rag
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 5

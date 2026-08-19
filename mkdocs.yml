@@ -1,0 +1,11 @@
+site_name: RAG SDK
+site_description: Configuration-driven RAG experimentation, evaluation, and deployment.
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - API Reference: api.md
+markdown_extensions:
+  - toc:
+      permalink: true
+  - admonition

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rag-sdk"
+version = "0.1.0"
+description = "Configuration-driven RAG experimentation, evaluation, and deployment SDK"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+dependencies = [
+    "faiss-cpu>=1.15",
+    "numpy>=2.0",
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.9",
+]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+]
+
+[project.scripts]
+rag = "rag_sdk.cli.app:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_sdk"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
