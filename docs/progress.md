@@ -67,7 +67,56 @@ Tracks completed phases and the tasks delivered in each. Phases follow
   - `ruff check .` clean
   - `pytest` — 66 tests passing on Python 3.14
 
-## Phase 2 — Hybrid retrieval, BM25, experiment engine, reports (PENDING)
+## Phase 2 — Hybrid retrieval, BM25, experiment engine, reports (COMPLETE)
+
+- Dependencies
+  - Added `bm25s>=0.3.0` (pure NumPy BM25 backend, no scipy)
+
+- Retrieval
+  - `RetrievalConfig` is now a discriminated union on `strategy`:
+    `DenseRetrievalConfig`, `BM25RetrievalConfig`, `HybridRetrievalConfig`
+  - `BM25Params` (k1, b, tokenizer, stopwords) shared by BM25 and hybrid
+  - `FusionConfig` (rrf | weighted, rrf_k, weights, candidate_k)
+  - `BM25Retriever` — `bm25s`-backed lexical retrieval with chunk-id mapping
+  - `HybridRetriever` — dense + BM25 with RRF or weighted fusion
+  - Score fusion helpers: `rrf_fuse`, `weighted_fuse` (min-max normalized)
+  - `build_retriever` factory + `retriever_registry`
+  - `Retriever.add_chunks` promoted to the abstract interface
+
+- Embeddings
+  - `HashEmbeddingProvider` moved from tests into the SDK (offline, deterministic)
+  - `build_embedding_provider` factory + `embedding_registry`; `EmbeddingConfig.dimension`
+
+- Ingestion (minimal)
+  - `load_documents` for `.txt`, `.md`, and `.json` corpora; `DocumentsConfig`
+  - PDF/DOCX/HTML deferred to later phases
+
+- Experiment engine
+  - `ExperimentConfig` embedded in `RagConfig` with dot-path parameter sweeps
+  - `expand_grid` — cartesian product over parameters; strategy selections
+    apply variant defaults; inapplicable overrides are skipped per combination
+    with an `ExperimentParameterWarning` and recorded in the run's
+    `skipped_parameters` metadata (visible in CSV/JSON/HTML reports)
+  - `ExperimentRunner` — config-driven chunk → embed → index → retrieve →
+    evaluate per variant; records config, dataset hash, metrics, latency,
+    timestamp, embedding info
+  - `ExperimentRecord` / `ExperimentResult` (Pydantic), JSONL dataset loader
+  - Reports: CSV, JSON, leaderboard CSV, self-contained interactive HTML
+    (vanilla JS sorting) + best-config recommendation by `primary_metric` (MRR default)
+
+- CLI (thin)
+  - `rag experiment CONFIG [--output DIR]` — runs the sweep and writes reports
+
+- Config
+  - `documents:` and `experiments:` sections; `dump_config` excludes nulls
+  - Example sweep config at `configs/experiment.yaml`
+
+- Tests
+  - Unit tests: BM25, fusion, hybrid, hash embeddings, ingestion, grid,
+    dataset, runner, reports, experiment config models, `rag experiment` CLI
+  - Integration: BM25 and hybrid retrieval pipelines; full config-driven
+    experiment producing all four report files
+  - `pytest` — 124 tests passing on Python 3.14
 
 ## Phase 3 — Sentence window, parent-child, auto-merging, reranking (PENDING)
 

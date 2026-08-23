@@ -9,11 +9,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from rag_sdk.chunking import build_chunker
-from rag_sdk.config import load_config
+from rag_sdk.config import BM25RetrievalConfig, HybridRetrievalConfig, load_config
 from rag_sdk.core import Chunk, Document
 from rag_sdk.evaluation import evaluate_retrieval
 from rag_sdk.indexing import FaissVectorStore
-from rag_sdk.retrieval import DenseRetriever
+from rag_sdk.retrieval import DenseRetriever, build_retriever
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "example.yaml"
 
@@ -96,3 +96,51 @@ def test_example_config_is_valid() -> None:
     config = load_config(CONFIG_PATH)
     assert config.chunking.strategy == "recursive"
     assert config.project.name == "api-rag"
+
+
+def test_bm25_pipeline_evaluates_metrics(hash_embedding) -> None:
+    chunks = _chunk_corpus()
+    store = FaissVectorStore(dimension=hash_embedding.dimension)
+    retriever = build_retriever(BM25RetrievalConfig(top_k=3), hash_embedding, store)
+    retriever.add_chunks(chunks)
+
+    queries = {
+        "cats": "kittens are young cats",
+        "astronomy": "planets orbit stars",
+        "finance": "savers earn compound interest",
+    }
+    samples = []
+    for document_id, query in queries.items():
+        retrieved = [result.chunk.id for result in retriever.search(query, top_k=3)]
+        relevant = {chunk.id for chunk in chunks if chunk.document_id == document_id}
+        samples.append((retrieved, relevant))
+
+    metrics = evaluate_retrieval(samples, k=3)
+    assert metrics["hit_at_k"] == 1.0
+    assert metrics["mrr"] == 1.0
+
+
+def test_hybrid_pipeline_evaluates_metrics(hash_embedding) -> None:
+    chunks = _chunk_corpus()
+    config = HybridRetrievalConfig(
+        top_k=3, fusion={"method": "rrf", "candidate_k": 10}
+    )
+    retriever = build_retriever(
+        config, hash_embedding, FaissVectorStore(dimension=hash_embedding.dimension)
+    )
+    retriever.add_chunks(chunks)
+
+    queries = {
+        "cats": "kittens are young cats",
+        "astronomy": "planets orbit stars",
+        "finance": "savers earn compound interest",
+    }
+    samples = []
+    for document_id, query in queries.items():
+        retrieved = [result.chunk.id for result in retriever.search(query, top_k=3)]
+        relevant = {chunk.id for chunk in chunks if chunk.document_id == document_id}
+        samples.append((retrieved, relevant))
+
+    metrics = evaluate_retrieval(samples, k=3)
+    assert metrics["hit_at_k"] == 1.0
+    assert metrics["mrr"] == 1.0

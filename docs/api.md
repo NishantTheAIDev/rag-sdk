@@ -18,7 +18,10 @@ Anything exposed from the top-level package and its submodules is public API.
 - `dump_config(config) -> str` — serialize a config to YAML.
 - `default_config() -> RagConfig` — the `rag init` skeleton.
 - `RagConfig`, `ProjectConfig`, `ChunkerConfig`, `RecursiveChunkerConfig`,
-  `FixedTokenChunkerConfig`, `EmbeddingConfig`, `RetrievalConfig`.
+  `FixedTokenChunkerConfig`, `EmbeddingConfig`, `DocumentsConfig`,
+  `ExperimentConfig`, `RetrievalConfig` (a discriminated union of
+  `DenseRetrievalConfig`, `BM25RetrievalConfig`, `HybridRetrievalConfig`),
+  `BM25Params`, `FusionConfig`.
 
 ## `rag_sdk.chunking`
 
@@ -32,7 +35,16 @@ Anything exposed from the top-level package and its submodules is public API.
 ## `rag_sdk.embeddings`
 
 - `EmbeddingProvider` — abstract base; `embed(texts) -> np.ndarray` and
-  `dimension`. Provider-specific adapters will live behind this interface.
+  `dimension`.
+- `HashEmbeddingProvider` — deterministic, offline provider for development.
+- `build_embedding_provider(config)` — resolve a provider by name.
+- `embedding_registry` / `register_embedding` — register custom providers.
+
+## `rag_sdk.ingestion`
+
+- `load_documents(path)` — load `.txt`, `.md`, or `.json` corpora into
+  `Document` objects.
+- `IngestionError` — raised for missing or malformed corpora.
 
 ## `rag_sdk.indexing`
 
@@ -42,10 +54,15 @@ Anything exposed from the top-level package and its submodules is public API.
 
 ## `rag_sdk.retrieval`
 
-- `Retriever` — abstract base; `search(query, top_k)`.
+- `Retriever` — abstract base; `add_chunks(chunks)` and `search(query, top_k)`.
 - `DenseRetriever(embedding_provider, store)` — embed the query and return the
-  nearest chunks. Register chunks with `add_chunks(chunks)`.
+  nearest chunks.
+- `BM25Retriever(params=None)` — `bm25s`-backed lexical retrieval.
+- `HybridRetriever(dense, lexical, config=None)` — fused dense + BM25.
 - `RetrievalResult(query, chunk, score)`.
+- `rrf_fuse`, `weighted_fuse` — score fusion helpers.
+- `build_retriever(config, embedding_provider, store)` — resolve a retriever by
+  strategy name; `retriever_registry` / `register_retriever`.
 
 ## `rag_sdk.evaluation`
 
@@ -54,7 +71,28 @@ Anything exposed from the top-level package and its submodules is public API.
 - `evaluate_retrieval(results, k)` — aggregate all metrics across queries.
 - `load_retrieval_results(path)` — load JSONL results for evaluation.
 
+## `rag_sdk.experiments`
+
+- `ExperimentConfig` — dataset, dot-path parameter sweeps, rank cutoff,
+  primary metric, output directory.
+- `expand_grid(base, parameters)` / `apply_override(config, path, value)` —
+  build the parameter sweep cartesian product.
+- `expand_grid_with_detail(base, parameters) -> list[GridVariant]` — as above
+  but each variant reports the parameters skipped for its strategy.
+- `ExperimentParameterWarning` — emitted when a sweep parameter does not apply
+  to a strategy (for example `retrieval.fusion.method` on a `dense` variant).
+- `ExperimentRunner(documents, base_config, experiment).run() ->
+  ExperimentResult` — run every combination.
+- `run_experiment(documents, base_config)` — run the sweep declared in config.
+- `ExperimentRecord` / `ExperimentResult` — per-run and aggregate results;
+  each record carries `skipped_parameters`; `result.leaderboard()` sorts by
+  the primary metric.
+- `load_queries(path)` — load a JSONL dataset
+  (`{"query", "relevant_documents": [doc_id, ...]}`).
+- `write_csv`, `write_json`, `write_leaderboard`, `write_html`,
+  `write_reports(result, output_dir)` — report writers.
+
 ## `rag_sdk.cli`
 
-- `app` — the `rag` Typer application with `init`, `validate`, and `evaluate`
-  commands. The CLI stays thin; logic lives in the SDK modules.
+- `app` — the `rag` Typer application with `init`, `validate`, `evaluate`, and
+  `experiment` commands. The CLI stays thin; logic lives in the SDK modules.

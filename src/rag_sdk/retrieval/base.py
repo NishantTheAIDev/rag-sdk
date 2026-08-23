@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict
 
@@ -21,6 +22,10 @@ class RetrievalResult(BaseModel):
 
 class Retriever(ABC):
     """Retrieves relevant chunks for a query."""
+
+    @abstractmethod
+    def add_chunks(self, chunks: Sequence[Chunk]) -> None:
+        """Register chunks so the retriever can serve them."""
 
     @abstractmethod
     def search(self, query: str, top_k: int) -> list[RetrievalResult]:
