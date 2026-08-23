@@ -40,8 +40,25 @@ class FixedTokenChunkerConfig(ChunkerConfigBase):
     tokenizer: Literal["whitespace"] = "whitespace"
 
 
+class SentenceWindowChunkerConfig(ChunkerConfigBase):
+    strategy: Literal["sentence_window"] = "sentence_window"
+    window_size: int = Field(default=3, ge=1)
+    window_overlap: int = Field(default=1, ge=0)
+
+
+class ParentChildChunkerConfig(ChunkerConfigBase):
+    strategy: Literal["parent_child"] = "parent_child"
+    parent_chunk_size: int = Field(default=1024, ge=1)
+    parent_overlap: int = Field(default=128, ge=0)
+    child_chunk_size: int = Field(default=256, ge=1)
+    child_overlap: int = Field(default=32, ge=0)
+
+
 ChunkerConfig = Annotated[
-    RecursiveChunkerConfig | FixedTokenChunkerConfig,
+    RecursiveChunkerConfig
+    | FixedTokenChunkerConfig
+    | SentenceWindowChunkerConfig
+    | ParentChildChunkerConfig,
     Field(discriminator="strategy"),
 ]
 
@@ -58,6 +75,16 @@ class RetrievalConfigBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     top_k: int = Field(default=5, ge=1)
+    candidate_k: int = Field(default=50, ge=1)
+    sentence_window: SentenceWindowExpansionConfig = Field(
+        default_factory=lambda: SentenceWindowExpansionConfig()
+    )
+    parent_child: ParentChildExpansionConfig = Field(
+        default_factory=lambda: ParentChildExpansionConfig()
+    )
+    auto_merging: AutoMergingConfig = Field(
+        default_factory=lambda: AutoMergingConfig()
+    )
 
 
 class DenseRetrievalConfig(RetrievalConfigBase):
@@ -103,6 +130,32 @@ class HybridRetrievalConfig(RetrievalConfigBase):
     bm25: BM25Params = Field(default_factory=BM25Params)
 
 
+class SentenceWindowExpansionConfig(BaseModel):
+    """Retrieval-time sentence window expansion (independent of chunking strategy)."""
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    window_size: int = Field(default=3, ge=1)
+
+
+class ParentChildExpansionConfig(BaseModel):
+    """Retrieval-time parent-child expansion."""
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+
+
+class AutoMergingConfig(BaseModel):
+    """Retrieval-time auto-merging of adjacent chunks."""
+
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool = False
+    similarity_threshold: float = Field(default=0.8, ge=0, le=1)
+    max_tokens: int = Field(default=512, ge=1)
+    max_chunks: int = Field(default=10, ge=1)
+    tokenizer: Literal["whitespace", "cl100k_base"] = "whitespace"
+
+
 RetrievalConfig = Annotated[
     DenseRetrievalConfig | BM25RetrievalConfig | HybridRetrievalConfig,
     Field(discriminator="strategy"),
@@ -117,6 +170,33 @@ class DocumentsConfig(BaseModel):
     path: str
 
 
+class RerankerConfigBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    top_k: int = Field(default=5, ge=1)
+
+
+class CrossEncoderRerankerConfig(RerankerConfigBase):
+    strategy: Literal["cross_encoder"] = "cross_encoder"
+    model: str = "BAAI/bge-reranker-base"
+    device: str | None = None
+
+
+class CohereRerankerConfig(RerankerConfigBase):
+    strategy: Literal["cohere"] = "cohere"
+    model: str = "rerank-v4.0-fast"
+    api_key: str | None = None
+
+
+class NoRerankerConfig(RerankerConfigBase):
+    strategy: Literal["none"] = "none"
+
+
+RerankerConfig = Annotated[
+    CrossEncoderRerankerConfig | CohereRerankerConfig | NoRerankerConfig,
+    Field(discriminator="strategy"),
+]
+
+
 class ExperimentConfig(BaseModel):
     """Parameter sweeps for the experiment engine."""
 
@@ -128,7 +208,7 @@ class ExperimentConfig(BaseModel):
     primary_metric: Literal[
         "hit_at_k", "precision_at_k", "recall_at_k", "mrr", "ndcg_at_k", "map"
     ] = "mrr"
-    output_dir: str = "experiments"
+    output_dir: str = "runs"
 
 
 class RagConfig(BaseModel):
@@ -140,5 +220,6 @@ class RagConfig(BaseModel):
     chunking: ChunkerConfig
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     retrieval: RetrievalConfig = Field(default_factory=DenseRetrievalConfig)
+    reranker: RerankerConfig | None = None
     documents: DocumentsConfig | None = None
     experiments: ExperimentConfig | None = None

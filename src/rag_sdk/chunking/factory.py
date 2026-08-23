@@ -4,13 +4,18 @@ from __future__ import annotations
 
 from rag_sdk.chunking.base import Chunker
 from rag_sdk.chunking.fixed import FixedTokenChunker
+from rag_sdk.chunking.parent_child import ParentChildChunker, SentenceWindowChunker
 from rag_sdk.chunking.recursive import RecursiveChunker
-from rag_sdk.config import ChunkerConfig
+from rag_sdk.config import (
+    ChunkerConfig,
+)
 from rag_sdk.core import Registry
 
 chunker_registry: Registry[type[Chunker]] = Registry()
 chunker_registry.register("recursive", RecursiveChunker)
 chunker_registry.register("fixed", FixedTokenChunker)
+chunker_registry.register("sentence_window", SentenceWindowChunker)
+chunker_registry.register("parent_child", ParentChildChunker)
 
 
 def build_chunker(config: ChunkerConfig) -> Chunker:

@@ -1,0 +1,68 @@
+# Example RAG experiment configuration.
+#
+# The `experiments` section declares parameter sweeps. Every combination is
+# run, evaluated against `dataset`, and reported to `output_dir`.
+#
+# Parameters use dot-paths into the pipeline config. Sweeping a strategy
+# (`retrieval.strategy`, `chunking.strategy`) applies that strategy's defaults,
+# so later overrides can tune it.
+
+project:
+  name: rag-experiment
+
+documents:
+  path: ./examples/docs
+
+chunking:
+  strategy: parent_child
+  parent_chunk_size: 1024
+  parent_overlap: 128
+  child_chunk_size: 256
+  child_overlap: 32
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: hybrid
+  top_k: 5                    # Final output after enrichment
+  candidate_k: 50             # Retriever pool before reranking
+  fusion:
+    method: rrf
+    candidate_k: 20
+  bm25:
+    k1: 1.5
+    b: 0.75
+  # Explicit context enrichment (not inferred from chunker)
+  sentence_window:
+    enabled: true
+    window_size: 3
+  parent_child:
+    enabled: true
+  auto_merging:
+    enabled: true
+    similarity_threshold: 0.8
+    max_tokens: 512
+    tokenizer: whitespace
+
+reranker:
+  strategy: cross_encoder
+  model: BAAI/bge-reranker-base
+  top_k: 5                    # Output after reranking
+
+experiments:
+  dataset: ./examples/queries.jsonl
+  k: 10
+  primary_metric: mrr
+  output_dir: ./runs
+  parameters:
+    # Chunking strategies
+    chunking.strategy: [recursive, parent_child]
+    # Retrieval strategies
+    retrieval.strategy: [dense, hybrid, bm25]
+    # Reranker (including none for baseline)
+    reranker.strategy: [none, cross_encoder]
+    # Enrichment strategies
+    retrieval.sentence_window.enabled: [true, false]
+    retrieval.parent_child.enabled: [true, false]
+    retrieval.auto_merging.enabled: [true, false]

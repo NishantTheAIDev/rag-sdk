@@ -1,5 +1,6 @@
 site_name: RAG SDK
 site_description: Configuration-driven RAG experimentation, evaluation, and deployment.
+dev_addr: 0.0.0.0:8002
 theme:
   name: material
 nav:
