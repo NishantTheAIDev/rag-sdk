@@ -39,7 +39,9 @@ def parse_config(text: str) -> RagConfig:
 
 def dump_config(config: RagConfig) -> str:
     """Serialize a configuration to YAML."""
-    return yaml.safe_dump(config.model_dump(mode="json"), sort_keys=False)
+    return yaml.safe_dump(
+        config.model_dump(mode="json", exclude_none=True), sort_keys=False
+    )
 
 
 def default_config() -> RagConfig:

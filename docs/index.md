@@ -89,20 +89,84 @@ rag evaluate results.jsonl --k 10
 where each line of `results.jsonl` is
 `{"retrieved": ["c1", "c2"], "relevant": ["c1"]}`.
 
+## Hybrid retrieval
+
+Retrieval is config-driven. `strategy` supports `dense`, `bm25`, and `hybrid`:
+
+```yaml
+retrieval:
+  strategy: hybrid
+  top_k: 5
+  fusion:
+    method: rrf          # rrf | weighted
+    candidate_k: 20      # candidates gathered from each retriever
+  bm25:
+    k1: 1.5
+    b: 0.75
+```
+
+## Experiments
+
+The `experiments:` section declares parameter sweeps as dot-paths into the
+pipeline config. Every combination is run and evaluated against a JSONL
+dataset where each line is
+`{"query": "...", "relevant_documents": ["doc_id", ...]}`:
+
+```yaml
+documents:
+  path: ./docs
+
+experiments:
+  dataset: ./queries.jsonl
+  k: 10
+  primary_metric: mrr      # hit_at_k | precision_at_k | recall_at_k | mrr | ndcg_at_k | map
+  output_dir: ./experiments
+  parameters:
+    chunking.chunk_size: [256, 512]
+    retrieval.strategy: [dense, hybrid]
+```
+
+Run it:
+
+```bash
+rag experiment rag.yaml
+```
+
+A parameter that does not apply to a strategy (for example
+`retrieval.fusion.method` on a `dense` combination) is skipped with a warning
+and recorded in that run's `skipped_parameters` metadata.
+
+Reports are written to `output_dir`:
+
+- `results.csv` — one row per configuration
+- `results.json` — full records plus a leaderboard
+- `leaderboard.csv` — configurations ranked by the primary metric
+- `report.html` — interactive sortable report with a recommended configuration
+
 ## Configuration reference
 
-| Section      | Field        | Default   | Description                     |
-| ------------ | ------------ | --------- | ------------------------------- |
-| `project`    | `name`       | `rag-project` | Project name                |
-| `chunking`   | `strategy`   | `recursive` | Chunking strategy            |
-| `chunking`   | `chunk_size` | `512`     | Target size per chunk            |
-| `chunking`   | `overlap`    | `64`      | Overlap between adjacent chunks  |
-| `embedding`  | `provider`   | `hash`    | Embedding provider name          |
-| `retrieval`  | `strategy`   | `dense`   | Retrieval strategy               |
-| `retrieval`  | `top_k`      | `5`       | Number of results returned       |
+| Section       | Field            | Default       | Description                        |
+| ------------- | ---------------- | ------------- | ---------------------------------- |
+| `project`     | `name`           | `rag-project` | Project name                       |
+| `documents`   | `path`           | —             | Corpus directory or JSON file      |
+| `chunking`    | `strategy`       | `recursive`   | Chunking strategy                  |
+| `chunking`    | `chunk_size`     | `512`         | Target size per chunk              |
+| `chunking`    | `overlap`        | `64`          | Overlap between adjacent chunks    |
+| `embedding`   | `provider`       | `hash`        | Embedding provider name            |
+| `embedding`   | `dimension`      | `128`         | Vector dimension (hash provider)   |
+| `retrieval`   | `strategy`       | `dense`       | Retrieval strategy                 |
+| `retrieval`   | `top_k`          | `5`           | Number of results returned         |
+| `retrieval`   | `fusion`         | —             | Hybrid fusion settings             |
+| `retrieval`   | `bm25`           | —             | BM25 k1/b/tokenizer settings       |
+| `experiments` | `dataset`        | —             | Path to the JSONL query dataset    |
+| `experiments` | `parameters`     | —             | Dot-path parameter sweeps          |
+| `experiments` | `k`              | `10`          | Rank cutoff for metrics            |
+| `experiments` | `primary_metric` | `mrr`         | Leaderboard sort metric            |
+| `experiments` | `output_dir`     | `experiments` | Report output directory            |
 
-`chunking.strategy` supports `recursive` and `fixed`. Each strategy validates
-its own fields; unknown strategies or extra keys are rejected.
+`chunking.strategy` supports `recursive` and `fixed`; `retrieval.strategy`
+supports `dense`, `bm25`, and `hybrid`. Each strategy validates its own fields;
+unknown strategies or extra keys are rejected.
 
 ## Development
 

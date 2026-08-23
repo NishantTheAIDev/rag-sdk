@@ -10,9 +10,16 @@ from rag_sdk.config.loader import (
     parse_config,
 )
 from rag_sdk.config.models import (
+    BM25Params,
+    BM25RetrievalConfig,
     ChunkerConfig,
+    DenseRetrievalConfig,
+    DocumentsConfig,
     EmbeddingConfig,
+    ExperimentConfig,
     FixedTokenChunkerConfig,
+    FusionConfig,
+    HybridRetrievalConfig,
     ProjectConfig,
     RagConfig,
     RecursiveChunkerConfig,
@@ -20,10 +27,17 @@ from rag_sdk.config.models import (
 )
 
 __all__ = [
+    "BM25Params",
+    "BM25RetrievalConfig",
     "ChunkerConfig",
     "ConfigError",
+    "DenseRetrievalConfig",
+    "DocumentsConfig",
     "EmbeddingConfig",
+    "ExperimentConfig",
     "FixedTokenChunkerConfig",
+    "FusionConfig",
+    "HybridRetrievalConfig",
     "ProjectConfig",
     "RagConfig",
     "RecursiveChunkerConfig",

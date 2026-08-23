@@ -14,6 +14,8 @@ import typer
 from rag_sdk.config import ConfigError, default_config, dump_config, load_config
 from rag_sdk.evaluation import evaluate_retrieval
 from rag_sdk.evaluation.io import load_retrieval_results
+from rag_sdk.experiments import run_experiment, write_reports
+from rag_sdk.ingestion import IngestionError, load_documents
 
 app = typer.Typer(
     name="rag",
@@ -68,3 +70,51 @@ def evaluate(
     typer.echo(f"{'metric':<16}{'value':>10}")
     for name, value in metrics.items():
         typer.echo(f"{name:<16}{value:>10.4f}")
+
+
+@app.command()
+def experiment(
+    config: Path,
+    output: Annotated[
+        Path | None,
+        typer.Option("--output", "-o", help="Directory to write reports into."),
+    ] = None,
+) -> None:
+    """Run a parameter sweep experiment and write reports."""
+    try:
+        loaded = load_config(config)
+    except ConfigError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if loaded.experiments is None:
+        raise typer.BadParameter(
+            f"{config} has no 'experiments' section; see configs/experiment.yaml"
+        )
+    if loaded.documents is None:
+        raise typer.BadParameter(
+            f"{config} has no 'documents.path' section pointing at a corpus"
+        )
+    try:
+        documents = load_documents(loaded.documents.path)
+    except IngestionError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    try:
+        result = run_experiment(documents, loaded)
+    except (ValueError, FileNotFoundError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+
+    output_dir = Path(output or loaded.experiments.output_dir)
+    paths = write_reports(result, output_dir)
+
+    recommendation = result.leaderboard()[0]
+    typer.echo(
+        f"Ran {len(result.records)} configuration(s) across "
+        f"{len(documents)} document(s)."
+    )
+    typer.echo(
+        f"Best by {result.primary_metric}: {recommendation.run_id} "
+        f"({recommendation.metrics[result.primary_metric]:.4f})"
+    )
+    typer.echo(f"Wrote reports to {output_dir}")
+    for name, path in paths.items():
+        typer.echo(f"  {name:<12} {path}")
