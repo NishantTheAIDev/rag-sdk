@@ -118,6 +118,72 @@ Tracks completed phases and the tasks delivered in each. Phases follow
     experiment producing all four report files
   - `pytest` — 124 tests passing on Python 3.14
 
-## Phase 3 — Sentence window, parent-child, auto-merging, reranking (PENDING)
+## Phase 3 — Sentence window, parent-child, auto-merging, reranking (COMPLETE)
+
+- Chunking
+  - `SentenceWindowChunker` — overlapping sentence windows as chunks
+  - `ParentChildChunker` — hierarchical parent/child chunks (side-effect free)
+    - Children indexed in VectorStore, parents persisted to ChunkStore
+    - Explicit `parent_id` / `child_ids` metadata on chunks
+  - Rule-based sentence splitter (no NLTK dependency) with abbreviation handling
+  - Sentence boundary computation stored in chunk metadata for retrieval-time expansion
+
+- Storage
+  - `DocumentStore` abstraction (SQLite + InMemory) for full document retrieval
+  - `ChunkStore` abstraction (SQLite + InMemory) for parent chunk persistence
+  - Per-experiment-run store paths (`run-{index}/chunkstore.db`, `run-{index}/docstore.db`)
+
+- Ingestion pipeline (`ingest_documents`)
+  - Stores full documents in DocumentStore
+  - Computes and stores sentence boundaries for all chunks
+  - ParentChildChunker: embeds/indexes children only; persists parents to ChunkStore
+  - Standard chunkers: embeds/indexes all chunks
+
+- VectorStore extension
+  - `get_embedding(chunk_id)` for retrieving stored embeddings (used by auto-merging)
+
+- Reranking
+  - `RerankerProvider` ABC with `rerank(query, candidates, top_k)`
+  - `CrossEncoderReranker` — sentence-transformers cross-encoder (e.g., BAAI/bge-reranker-base)
+  - `CohereReranker` — Cohere Rerank v4 API (model: rerank-v4.0-fast)
+  - `NoOpReranker` — baseline for experiment comparisons (`strategy: none`)
+  - Single canonical `reranker:` config at `RagConfig` level (not under RetrievalConfig)
+
+- Retrieval pipeline (Retriever → Reranker → Enrichment)
+  - `RetrievalPipeline` composes retriever, reranker, and enrichers
+  - Retriever returns `candidate_k` results; reranker returns `reranker.top_k`
+  - No reranker: truncates to `retrieval.top_k` BEFORE enrichment
+  - Lineage preserved: `source_chunk_id`, `source_chunk_score`, `source_chunk_rank`
+  - Reranker lineage: `rerank_score`, `rerank_rank`
+
+- Context enrichment (after reranking)
+  - `ParentChildExpander` — maps source chunk → parent via ChunkStore
+    - Deduplicates parent chunks; preserves all child IDs in `child_ids`
+    - Aggregates scores/ranks from contributing children
+  - `SentenceWindowExpander` — expands using stored boundaries + DocumentStore
+    - Resolves original source chunk via `source_chunk_id`
+    - Uses sentence boundaries from ingestion-time computation
+  - `AutoMerger` — merges adjacent chunks from same document
+    - Uses stored embeddings from VectorStore via `source_chunk_id`
+    - Token-aware (`max_tokens`) with configurable tokenizer (whitespace/cl100k_base)
+    - Preserves `merged_source_ids` lineage
+
+- Configuration
+  - Explicit enrichment configs under `retrieval:` (not inferred from chunker)
+  - `candidate_k` (retriever pool), `reranker.top_k`, `retrieval.top_k` separate
+  - `RerankerConfig` discriminated union: cross_encoder | cohere | none
+
+- Experiments
+  - Sweeps over `reranker.strategy: [none, cross_encoder, cohere]`
+  - Sweeps over enrichment flags: sentence_window, parent_child, auto_merging
+  - Per-run stores, full lineage in reports
+
+- Tests
+  - All 128 tests passing (unit + integration)
+  - Cartesian sweeps, inapplicable overrides, parent deduplication
+  - Lineage preservation, score preservation, pipeline ordering
+  - Enrichment combinations: parent_child+auto_merging, sentence_window+parent_child, all three
+
+- Example config: `configs/phase3.yaml`
 
 ## Phase 4 — Answer evaluation, observability, production runtime (PENDING)

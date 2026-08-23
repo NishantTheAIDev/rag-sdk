@@ -1,0 +1,6 @@
+{"query": "kittens are young cats", "relevant_documents": ["cats"]}
+{"query": "why do cats purr", "relevant_documents": ["cats"]}
+{"query": "planets orbit stars", "relevant_documents": ["astronomy"]}
+{"query": "what is the milky way", "relevant_documents": ["astronomy"]}
+{"query": "savers earn compound interest", "relevant_documents": ["finance"]}
+{"query": "how do portfolios balance risk", "relevant_documents": ["finance"]}

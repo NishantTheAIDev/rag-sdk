@@ -50,6 +50,22 @@ Do not tightly couple these components.
 
 Use type hints throughout the codebase.
 
+## Development Environment
+
+This project uses `uv` for dependency management. Use the project's `.venv` for all commands:
+
+```bash
+# Install dependencies
+uv sync --all-extras
+
+# Run commands in the venv
+uv run pytest
+uv run ruff check .
+uv run mkdocs serve
+```
+
+Do not use `pip install` directly; the `.venv` is managed by `uv`.
+
 ## Development Rules
 
 Before implementing a major feature:

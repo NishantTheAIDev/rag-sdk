@@ -13,11 +13,26 @@ from rag_sdk.core import Chunk
 class RetrievalResult(BaseModel):
     """A single retrieved chunk for a query."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=False, arbitrary_types_allowed=True)
 
     query: str
     chunk: Chunk
     score: float
+
+    # Lineage - ALWAYS points to original retrieved chunk
+    source_chunk_id: str = ""
+    source_chunk_score: float = 0.0
+    source_chunk_rank: int = 0
+
+    # Reranker lineage
+    rerank_score: float | None = None
+    rerank_rank: int | None = None
+
+    # Enrichment tracking
+    expansion_type: str = "none"
+    parent_id: str | None = None
+    child_ids: list[str] = []
+    merged_source_ids: list[str] = []
 
 
 class Retriever(ABC):

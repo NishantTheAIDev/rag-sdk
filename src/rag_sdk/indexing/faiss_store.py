@@ -23,6 +23,8 @@ class FaissVectorStore(VectorStore):
         self._dimension = dimension
         self._index = faiss.IndexFlatIP(dimension)
         self._ids: list[str] = []
+        # Store embeddings for retrieval by ID (for auto-merging)
+        self._embeddings: dict[str, np.ndarray] = {}
 
     def add(self, ids: Sequence[str], vectors: np.ndarray) -> None:
         array = np.asarray(vectors, dtype=np.float32)
@@ -36,6 +38,9 @@ class FaissVectorStore(VectorStore):
             raise ValueError("ids must be unique")
         self._index.add(array)
         self._ids.extend(ids)
+        # Store embeddings for get_embedding lookup
+        for idx, chunk_id in enumerate(ids):
+            self._embeddings[chunk_id] = array[idx].copy()
 
     def search(self, vector: np.ndarray, k: int) -> list[tuple[str, float]]:
         if k < 1:
@@ -56,3 +61,7 @@ class FaissVectorStore(VectorStore):
 
     def __len__(self) -> int:
         return self._index.ntotal
+
+    def get_embedding(self, chunk_id: str) -> np.ndarray | None:
+        """Retrieve the stored embedding for a chunk ID."""
+        return self._embeddings.get(chunk_id)

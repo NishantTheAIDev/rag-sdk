@@ -120,7 +120,7 @@ experiments:
   dataset: ./queries.jsonl
   k: 10
   primary_metric: mrr      # hit_at_k | precision_at_k | recall_at_k | mrr | ndcg_at_k | map
-  output_dir: ./experiments
+  output_dir: ./runs
   parameters:
     chunking.chunk_size: [256, 512]
     retrieval.strategy: [dense, hybrid]
@@ -162,7 +162,7 @@ Reports are written to `output_dir`:
 | `experiments` | `parameters`     | —             | Dot-path parameter sweeps          |
 | `experiments` | `k`              | `10`          | Rank cutoff for metrics            |
 | `experiments` | `primary_metric` | `mrr`         | Leaderboard sort metric            |
-| `experiments` | `output_dir`     | `experiments` | Report output directory            |
+| `experiments` | `output_dir`     | `runs`         | Report output directory            |
 
 `chunking.strategy` supports `recursive` and `fixed`; `retrieval.strategy`
 supports `dense`, `bm25`, and `hybrid`. Each strategy validates its own fields;

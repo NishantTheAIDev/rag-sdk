@@ -12,6 +12,12 @@ class DocumentMetadata(BaseModel):
     title: str | None = None
     page: int | None = None
     headings: list[str] = Field(default_factory=list)
+    # Parent-child chunking
+    parent_id: str | None = None
+    child_ids: list[str] = Field(default_factory=list)
+    chunk_type: str | None = None  # "parent" | "child" | None
+    # Sentence window expansion
+    sentence_boundaries: list[tuple[int, int]] = Field(default_factory=list)
 
 
 class Document(BaseModel):

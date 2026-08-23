@@ -22,3 +22,10 @@ class VectorStore(ABC):
     @abstractmethod
     def __len__(self) -> int:
         """Number of vectors stored."""
+
+    @abstractmethod
+    def get_embedding(self, chunk_id: str) -> np.ndarray | None:
+        """Retrieve the stored embedding for a chunk ID.
+
+        Returns None if the chunk ID is not found.
+        """
