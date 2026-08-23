@@ -1,11 +1,11 @@
 # RAG SDK
 
-A Python SDK for building, experimenting with, evaluating, and deploying
+A Python SDK for building, experimenting with, evaluating, and optimizing
 production-grade RAG pipelines through configuration instead of boilerplate.
 
 The primary goal is to answer **"which RAG configuration works best for my
-data?"** by making chunking, embedding, retrieval, reranking, and evaluation
-configurable and measurable.
+data?"** by making chunking, embedding, retrieval, reranking, generation,
+evaluation, and optimization configurable and measurable.
 
 ## Quickstart
 
@@ -91,7 +91,7 @@ where each line of `results.jsonl` is
 
 ## Hybrid retrieval
 
-Retrieval is config-driven. `strategy` supports `dense`, `bm25`, and `hybrid`:
+Retrieval is config-driven. `strategy` supports `dense`, `bm25`, `hybrid`, and `mmr`:
 
 ```yaml
 retrieval:
@@ -103,6 +103,16 @@ retrieval:
   bm25:
     k1: 1.5
     b: 0.75
+```
+
+MMR (Maximal Marginal Relevance):
+
+```yaml
+retrieval:
+  strategy: mmr
+  top_k: 10
+  candidate_k: 50
+  lambda_param: 0.5      # 0 = diversity, 1 = relevance
 ```
 
 ## Experiments
@@ -143,6 +153,79 @@ Reports are written to `output_dir`:
 - `leaderboard.csv` — configurations ranked by the primary metric
 - `report.html` — interactive sortable report with a recommended configuration
 
+## End-to-End RAG with Generation & Answer Evaluation
+
+The SDK supports full RAG evaluation including answer generation and quality assessment.
+
+### Generation
+
+```yaml
+generation:
+  provider: openai      # mock | openai | anthropic | ollama
+  model: gpt-4o-mini
+  temperature: 0.0
+  max_tokens: 512
+```
+
+### Answer Evaluation
+
+```yaml
+evaluation:
+  answer:
+    enabled: true
+    reference_based: true
+    llm_judge:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.0
+    metrics:
+      - faithfulness
+      - answer_relevance
+      - context_precision
+      - context_recall
+      - correctness
+      - citation_accuracy
+```
+
+Run end-to-end evaluation:
+
+```bash
+rag evaluate rag.yaml
+```
+
+### Optimization
+
+```yaml
+optimization:
+  primary_metric: faithfulness
+  secondary_metric: latency_ms
+  constraints:
+    max_latency_ms: 500
+  weights:
+    faithfulness: 1.0
+    latency_ms: -0.5
+```
+
+Run optimization on experiment results:
+
+```bash
+rag optimize rag.yaml
+```
+
+Export the recommended configuration:
+
+```bash
+rag export-config rag.yaml -o optimized.yaml
+```
+
+### Baseline Benchmark
+
+```bash
+rag benchmark ./data/docs ./data/queries.jsonl --version v1
+```
+
+The baseline v1 uses: recursive chunking (512/64), hash embeddings, dense retrieval (top_k=10), no reranker, mock generator.
+
 ## Configuration reference
 
 | Section       | Field            | Default       | Description                        |
@@ -158,15 +241,23 @@ Reports are written to `output_dir`:
 | `retrieval`   | `top_k`          | `5`           | Number of results returned         |
 | `retrieval`   | `fusion`         | —             | Hybrid fusion settings             |
 | `retrieval`   | `bm25`           | —             | BM25 k1/b/tokenizer settings       |
+| `retrieval`   | `lambda_param`   | `0.5`         | MMR lambda (0=diversity, 1=relevance) |
+| `reranker`    | `strategy`       | `none`        | Reranker strategy                  |
+| `generation`  | `provider`       | `mock`        | Generation provider                |
+| `generation`  | `model`          | `mock`        | Model name                         |
+| `evaluation`  | `answer.enabled` | `true`        | Enable answer evaluation           |
+| `optimization`| `primary_metric` | `mrr`         | Optimization primary metric        |
 | `experiments` | `dataset`        | —             | Path to the JSONL query dataset    |
 | `experiments` | `parameters`     | —             | Dot-path parameter sweeps          |
 | `experiments` | `k`              | `10`          | Rank cutoff for metrics            |
 | `experiments` | `primary_metric` | `mrr`         | Leaderboard sort metric            |
 | `experiments` | `output_dir`     | `runs`         | Report output directory            |
 
-`chunking.strategy` supports `recursive` and `fixed`; `retrieval.strategy`
-supports `dense`, `bm25`, and `hybrid`. Each strategy validates its own fields;
-unknown strategies or extra keys are rejected.
+`chunking.strategy` supports `recursive`, `fixed`, `sentence_window`, `parent_child`;
+`retrieval.strategy` supports `dense`, `bm25`, `hybrid`, `mmr`;
+`reranker.strategy` supports `cross_encoder`, `cohere`, `none`;
+`generation.provider` supports `mock`, `openai`, `anthropic`, `ollama`.
+Each strategy validates its own fields; unknown strategies or extra keys are rejected.
 
 ## Development
 

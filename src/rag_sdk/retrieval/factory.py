@@ -8,6 +8,7 @@ from rag_sdk.config import (
     BM25RetrievalConfig,
     DenseRetrievalConfig,
     HybridRetrievalConfig,
+    MMRRetrievalConfig,
     RagConfig,
     RetrievalConfig,
 )
@@ -19,12 +20,14 @@ from rag_sdk.retrieval.base import Retriever
 from rag_sdk.retrieval.bm25 import BM25Retriever
 from rag_sdk.retrieval.dense import DenseRetriever
 from rag_sdk.retrieval.hybrid import HybridRetriever
+from rag_sdk.retrieval.mmr import MMRRetriever
 from rag_sdk.retrieval.pipeline import RetrievalPipeline
 
 retriever_registry: Registry[type[Retriever]] = Registry()
 retriever_registry.register("dense", DenseRetriever)
 retriever_registry.register("bm25", BM25Retriever)
 retriever_registry.register("hybrid", HybridRetriever)
+retriever_registry.register("mmr", MMRRetriever)
 
 
 def build_retriever(
@@ -45,6 +48,8 @@ def build_retriever(
             dense = DenseRetriever(embedding_provider, store)
             lexical = BM25Retriever(config.bm25)
             return HybridRetriever(dense, lexical, config)
+        case MMRRetrievalConfig():
+            return MMRRetriever(config, embedding_provider, store)
         case _:  # pragma: no cover - discriminated union guarantees exhaustion
             raise ValueError(f"Unsupported retrieval strategy: {config.strategy!r}")
 

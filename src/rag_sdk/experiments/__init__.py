@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from rag_sdk.experiments.dataset import DatasetError, QuerySample, load_queries
+from rag_sdk.dataset import QuerySample
+from rag_sdk.experiments.dataset import DatasetError, load_queries
 from rag_sdk.experiments.grid import (
     ExperimentParameterWarning,
     GridVariant,

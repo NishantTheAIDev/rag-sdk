@@ -1,11 +1,11 @@
 # RAG SDK
 
-Configuration-driven RAG experimentation, evaluation, and deployment.
+Configuration-driven RAG experimentation, evaluation, and optimization.
 
-A Python SDK for building, experimenting with, evaluating, and deploying
+A Python SDK for building, experimenting with, evaluating, and optimizing
 production-grade RAG pipelines by editing a YAML config instead of writing
-boilerplate. Compare chunking, embedding, retrieval, reranking, and evaluation
-strategies and let the SDK measure what works best for your data.
+boilerplate. Compare chunking, embedding, retrieval, reranking, generation,
+and evaluation strategies and let the SDK measure what works best for your data.
 
 ## Features
 
@@ -13,27 +13,41 @@ strategies and let the SDK measure what works best for your data.
 - Pluggable chunking: recursive, fixed-token, **sentence window**, **parent-child**
 - `EmbeddingProvider` interface for swappable embedding backends
 - FAISS-backed vector store (`FaissVectorStore`)
-- Dense, BM25, and hybrid (RRF/weighted fusion) retrieval
+- Dense, BM25, hybrid (RRF/weighted fusion), and **MMR** retrieval
 - **Reranking**: cross-encoder, Cohere v4, or none (baseline)
 - **Context enrichment**: parent-child expansion, sentence window, auto-merging
+- **Generation** (for evaluation): Mock, OpenAI, Anthropic, Ollama providers
+- **Citation support** — preserve source lineage through to generated answers
+- **Context construction** — token-budgeted, deduplicated, metadata-aware
+- **Answer evaluation**: reference-based + LLM-as-judge (faithfulness, relevance, precision, recall, correctness, citation accuracy)
+- **Optimization engine**: Pareto frontier, constraints, weighted scoring, baseline comparison
 - Retrieval metrics: Hit@K, Recall@K, Precision@K, MRR, nDCG, MAP
 - Configuration-driven experiment engine with parameter sweeps
 - CSV, JSON, leaderboard, and interactive HTML experiment reports
-- Thin `rag` CLI (`init`, `validate`, `evaluate`, `experiment`)
+- Thin `rag` CLI (`init`, `validate`, `evaluate`, `benchmark`, `experiment`, `optimize`, `export-config`)
 
 ## Install
 
 ```bash
 uv pip install -e ".[dev]"
-# For reranking: uv pip install -e ".[reranker]"
-# For all:       uv pip install -e ".[all]"
+# For generation:     uv pip install -e ".[generation]"
+# For evaluation:     uv pip install -e ".[evaluation]"
+# For reranking:      uv pip install -e ".[reranker]"
+# For tokenizers:     uv pip install -e ".[tokenizers]"
+# For observability:  uv pip install -e ".[observability]"
+# For all:            uv pip install -e ".[all]"
 ```
 
 ## Quickstart
 
 ```bash
-rag init        # write rag.yaml
+rag init              # write rag.yaml
 rag validate rag.yaml
+rag benchmark ./docs ./queries.jsonl    # run baseline
+rag evaluate rag.yaml                   # end-to-end evaluation
+rag experiment rag.yaml                 # parameter sweep
+rag optimize rag.yaml                   # Pareto optimization
+rag export-config rag.yaml              # export optimized config
 ```
 
 ```python
@@ -337,6 +351,125 @@ reranker:
 ```
 
 Install with: `uv pip install -e ".[reranker]"`
+
+### 8. Full Pipeline with Generation & Answer Evaluation
+
+```yaml
+project:
+  name: full-e2e-rag
+
+documents:
+  path: ./data/docs
+
+chunking:
+  strategy: parent_child
+  parent_chunk_size: 1024
+  parent_overlap: 128
+  child_chunk_size: 256
+  child_overlap: 32
+
+embedding:
+  provider: sentence-transformers
+  model: BAAI/bge-base-en-v1.5
+
+retrieval:
+  strategy: hybrid
+  top_k: 5
+  candidate_k: 50
+  fusion:
+    method: rrf
+  sentence_window:
+    enabled: true
+    window_size: 3
+  parent_child:
+    enabled: true
+  auto_merging:
+    enabled: true
+    similarity_threshold: 0.8
+    max_tokens: 512
+    tokenizer: whitespace
+
+reranker:
+  strategy: cross_encoder
+  model: BAAI/bge-reranker-base
+  top_k: 5
+
+generation:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.0
+  max_tokens: 512
+
+evaluation:
+  answer:
+    enabled: true
+    reference_based: true
+    llm_judge:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.0
+    metrics:
+      - faithfulness
+      - answer_relevance
+      - context_precision
+      - context_recall
+      - correctness
+      - citation_accuracy
+
+experiments:
+  dataset: ./data/queries.jsonl
+  k: 10
+  primary_metric: mrr
+  output_dir: ./runs
+  parameters:
+    chunking.strategy: [recursive, parent_child]
+    retrieval.strategy: [dense, hybrid]
+    reranker.strategy: [none, cross_encoder]
+    generation.provider: [mock, openai]
+
+optimization:
+  primary_metric: faithfulness
+  secondary_metric: latency_ms
+  constraints:
+    max_latency_ms: 500
+  weights:
+    faithfulness: 1.0
+    latency_ms: -0.5
+```
+
+Run end-to-end evaluation:
+
+```bash
+rag evaluate rag.yaml
+```
+
+Run Pareto optimization on experiment results:
+
+```bash
+rag optimize rag.yaml
+```
+
+Export the optimized configuration:
+
+```bash
+rag export-config rag.yaml -o optimized.yaml
+```
+
+### 9. Baseline Benchmark
+
+```bash
+rag benchmark ./data/docs ./data/queries.jsonl --version v1
+```
+
+### 10. MMR Retrieval
+
+```yaml
+retrieval:
+  strategy: mmr
+  top_k: 10
+  candidate_k: 50
+  lambda_param: 0.5  # 0 = diversity, 1 = relevance
+```
 
 ## Pipeline Architecture
 

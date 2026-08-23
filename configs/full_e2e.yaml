@@ -1,0 +1,89 @@
+# Full Configuration: All Enrichment + Reranking + Generation + Evaluation + Optimization
+# Complete RAG pipeline with all features enabled
+
+project:
+  name: full-rag
+
+documents:
+  path: ./data/docs
+
+chunking:
+  strategy: parent_child
+  parent_chunk_size: 1024
+  parent_overlap: 128
+  child_chunk_size: 256
+  child_overlap: 32
+
+embedding:
+  provider: hash
+  model: BAAI/bge-base-en-v1.5
+
+retrieval:
+  strategy: hybrid
+  top_k: 5                    # Final output
+  candidate_k: 50             # Before reranking
+  fusion:
+    method: rrf
+  # Explicit enrichment (not inferred from chunker)
+  sentence_window:
+    enabled: true
+    window_size: 3
+  parent_child:
+    enabled: true
+  auto_merging:
+    enabled: true
+    similarity_threshold: 0.8
+    max_tokens: 512
+    max_chunks: 10
+    tokenizer: whitespace
+
+reranker:
+  strategy: cross_encoder
+  model: BAAI/bge-reranker-base
+  top_k: 5                    # Post-rerank pool
+
+# Generation for answer evaluation
+generation:
+  provider: openai            # mock | openai | anthropic | ollama
+  model: gpt-4o-mini
+  temperature: 0.0
+  max_tokens: 512
+
+# Answer evaluation
+evaluation:
+  answer:
+    enabled: true
+    reference_based: true
+    llm_judge:
+      provider: openai
+      model: gpt-4o-mini
+      temperature: 0.0
+    metrics:
+      - faithfulness
+      - answer_relevance
+      - context_precision
+      - context_recall
+      - correctness
+      - citation_accuracy
+
+# Optimization
+optimization:
+  primary_metric: faithfulness
+  secondary_metric: latency_ms
+  constraints:
+    max_latency_ms: 500
+  weights:
+    faithfulness: 1.0
+    latency_ms: -0.5
+
+# Experiments
+experiments:
+  dataset: ./data/queries.jsonl
+  k: 10
+  primary_metric: mrr
+  output_dir: ./runs
+  parameters:
+    chunking.strategy: [recursive, parent_child]
+    retrieval.strategy: [dense, hybrid]
+    reranker.strategy: [none, cross_encoder]
+    generation.provider: [mock, openai]

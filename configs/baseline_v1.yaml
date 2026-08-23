@@ -1,0 +1,37 @@
+# Baseline Benchmark Configuration (v1)
+# Reproducible baseline for comparing experimental results
+# Run with: rag benchmark ./data/docs ./data/queries.jsonl --version v1
+
+project:
+  name: rag-baseline
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 10
+  auto_merging:
+    tokenizer: whitespace
+
+reranker:
+  strategy: none
+
+generation:
+  provider: mock
+  model: mock
+
+evaluation:
+  answer:
+    enabled: true
+    reference_based: true
+    metrics:
+      - faithfulness
+      - answer_relevance
+      - context_precision
+      - context_recall

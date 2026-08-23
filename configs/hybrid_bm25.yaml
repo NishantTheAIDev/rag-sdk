@@ -1,0 +1,42 @@
+# Hybrid Retrieval (BM25 + Dense) Configuration
+# Combines dense vector search with BM25 lexical search using RRF fusion
+
+project:
+  name: hybrid-rag
+
+documents:
+  path: ./data/docs
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash  # Use "sentence-transformers" for real embeddings
+  model: BAAI/bge-base-en-v1.5
+
+retrieval:
+  strategy: hybrid
+  top_k: 5
+  candidate_k: 50
+  fusion:
+    method: rrf          # rrf | weighted
+    rrf_k: 60
+    candidate_k: 20
+  bm25:
+    k1: 1.5
+    b: 0.75
+    tokenizer: default   # default | whitespace
+    stopwords: true
+
+# Optional: experiments
+# experiments:
+#   dataset: ./data/queries.jsonl
+#   k: 10
+#   primary_metric: mrr
+#   output_dir: ./runs
+#   parameters:
+#     chunking.chunk_size: [256, 512]
+#     retrieval.strategy: [dense, hybrid, bm25]
+#     retrieval.fusion.method: [rrf, weighted]

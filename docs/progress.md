@@ -186,4 +186,69 @@ Tracks completed phases and the tasks delivered in each. Phases follow
 
 - Example config: `configs/phase3.yaml`
 
-## Phase 4 — Answer evaluation, observability, production runtime (PENDING)
+## Phase 4 — Answer evaluation, observability, optimization, caching (COMPLETE)
+
+- Generation engine (for evaluation only)
+  - `Generator` ABC with `generate(prompt, context)` → `GenerationResponse`
+  - Providers: `MockGenerator`, `OpenAIGenerator`, `AnthropicGenerator`, `OllamaGenerator`
+  - `build_generator` factory + `generator_registry`
+  - Optional deps: `openai`, `anthropic`, `httpx` via `[generation]` extra
+
+- Citation support
+  - `Citation` — document_id, chunk_id, page, section, source_uri, text_span, score
+  - `CitedAnswer` — answer text + list of citations
+  - Lineage preserved from retrieval → context → generation
+
+- Context construction (separate stage per spec)
+  - `ContextBuilder` ABC with `build(retrieved_chunks, query, config)` → `Context`
+  - `DefaultContextBuilder` — deduplication, token budgeting, metadata formatting
+  - Config: `max_tokens`, `include_metadata`, `citation_format`, `tokenizer`
+  - Tokenizer abstraction: `WhitespaceTokenizer`, `Cl100kBaseTokenizer` (optional tiktoken)
+
+- Answer evaluation (retrieval + generation + answer eval)
+  - `Evaluator` protocol — `evaluate(sample, result)` → `EvaluationResult`
+  - Reference-based evaluators: `FaithfulnessEvaluator`, `AnswerRelevanceEvaluator`,
+    `ContextPrecisionEvaluator`, `ContextRecallEvaluator`, `CorrectnessEvaluator`,
+    `CitationAccuracyEvaluator`
+  - LLM-as-judge evaluators (independent judge config): `LLMFaithfulnessEvaluator`,
+    `LLMAnswerRelevanceEvaluator`, `LLMCorrectnessEvaluator`
+  - `EvaluationPipeline` — composes retriever → reranker → context → generator → evaluators
+  - JSONL dataset with `query_id`, `query`, `relevant_documents`, `relevant_chunks`, `reference_answer`
+
+- Optimization engine
+  - `ParetoOptimizer` — identifies Pareto-optimal configs across objectives
+  - Objectives: retrieval quality, answer quality, latency, token usage, estimated cost
+  - Constraints: `max_latency_ms`, `max_cost`, `min_recall`
+  - Weighted scoring with primary/secondary metrics
+  - `OptimizationResult` — recommended_config, reasoning, pareto_frontier, baseline_comparison
+
+- Baseline configuration & `rag benchmark`
+  - Versioned baseline (v1): recursive chunking + hash embeddings + dense retrieval + mock generator
+  - Reproducible for consistent comparison across experiments
+
+- Minimal telemetry (optional, disabled by default)
+  - Structured event logging: `stage_latency`, `token_usage`, `experiment_start`, `variant_start`, `error`
+  - Console/JSONL exporter; privacy-first `CaptureConfig` (prompts, responses, content off by default)
+  - OTLP/OpenTelemetry as optional `[observability]` extra
+
+- Cache abstraction
+  - `Cache` protocol: `get`, `set`, `delete`, `clear`
+  - `InMemoryCache` with TTL support
+  - Integration points: embedding, retrieval, generation caches (config-gated)
+
+- CLI commands
+  - `rag evaluate CONFIG` — end-to-end evaluation (retrieval + generation + answer eval)
+  - `rag benchmark DOCUMENTS DATASET` — run versioned baseline, save results
+  - `rag experiment CONFIG` — parameter sweeps with reports
+  - `rag optimize CONFIG` — Pareto optimization on experiment results, print recommendation
+  - `rag export-config CONFIG` — export optimized config as YAML/JSON
+
+- Tests
+  - 176 tests passing (unit + integration)
+  - New unit tests: MMR, tokenizer, generation, context, answer eval, optimization, telemetry, cache
+  - Integration: full evaluation pipeline, experiment + optimization flow, all CLI commands
+  - No external API keys required for core tests (mock providers)
+
+- Documentation
+  - Updated `docs/progress.md`, `README.md`, `docs/api.md`, `docs/index.md`
+  - Example configs: `configs/phase4.yaml` (full pipeline with generation + eval + optimization)
