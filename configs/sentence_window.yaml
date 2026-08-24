@@ -1,0 +1,37 @@
+# Sentence Window Expansion Configuration
+# Expands retrieved chunks to include surrounding sentences
+
+project:
+  name: sentence-window-rag
+
+documents:
+  path: ./data/docs
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+  model: BAAI/bge-base-en-v1.5
+
+retrieval:
+  strategy: hybrid
+  top_k: 5
+  candidate_k: 50
+  fusion:
+    method: rrf
+  sentence_window:
+    enabled: true
+    window_size: 3            # Expand to 3 sentences around match
+
+# Optional: experiments
+# experiments:
+#   dataset: ./data/queries.jsonl
+#   k: 10
+#   primary_metric: mrr
+#   output_dir: ./runs
+#   parameters:
+#     retrieval.sentence_window.enabled: [true, false]
+#     retrieval.sentence_window.window_size: [3, 5]

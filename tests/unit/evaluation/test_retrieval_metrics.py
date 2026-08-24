@@ -10,11 +10,13 @@ from rag_sdk.evaluation import (
     average_precision,
     evaluate_retrieval,
     hit_at_k,
-    map,
     ndcg_at_k,
     precision_at_k,
     recall_at_k,
     reciprocal_rank,
+)
+from rag_sdk.evaluation import (
+    map_score as map,
 )
 
 

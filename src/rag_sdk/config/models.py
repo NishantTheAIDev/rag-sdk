@@ -10,6 +10,23 @@ from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+AnswerMetric = Literal[
+    "faithfulness",
+    "answer_relevance",
+    "context_precision",
+    "context_recall",
+    "correctness",
+    "citation_accuracy",
+]
+OptimizationMetric = Literal[
+    "recall_at_k",
+    "mrr",
+    "ndcg_at_k",
+    "faithfulness",
+    "answer_relevance",
+    "latency_ms",
+]
+
 
 class ProjectConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -130,6 +147,13 @@ class HybridRetrievalConfig(RetrievalConfigBase):
     bm25: BM25Params = Field(default_factory=BM25Params)
 
 
+class MMRRetrievalConfig(RetrievalConfigBase):
+    """Maximal Marginal Relevance retrieval configuration."""
+
+    strategy: Literal["mmr"] = "mmr"
+    lambda_param: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
 class SentenceWindowExpansionConfig(BaseModel):
     """Retrieval-time sentence window expansion (independent of chunking strategy)."""
 
@@ -157,7 +181,7 @@ class AutoMergingConfig(BaseModel):
 
 
 RetrievalConfig = Annotated[
-    DenseRetrievalConfig | BM25RetrievalConfig | HybridRetrievalConfig,
+    DenseRetrievalConfig | BM25RetrievalConfig | HybridRetrievalConfig | MMRRetrievalConfig,
     Field(discriminator="strategy"),
 ]
 
@@ -211,6 +235,136 @@ class ExperimentConfig(BaseModel):
     output_dir: str = "runs"
 
 
+class TokenizerConfig(BaseModel):
+    """Tokenizer configuration for context budgeting."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["whitespace", "cl100k_base", "custom"] = "whitespace"
+    custom_path: str | None = None
+
+
+class GenerationConfigBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str
+    model: str
+    temperature: float = 0.0
+    max_tokens: int = 512
+
+
+class MockGenerationConfig(GenerationConfigBase):
+    provider: Literal["mock"] = "mock"
+    canned_response: str = "Mock response"
+
+
+class OpenAIGenerationConfig(GenerationConfigBase):
+    provider: Literal["openai"] = "openai"
+    api_key: str | None = None
+    base_url: str | None = None
+    organization: str | None = None
+
+
+class AnthropicGenerationConfig(GenerationConfigBase):
+    provider: Literal["anthropic"] = "anthropic"
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+class OllamaGenerationConfig(GenerationConfigBase):
+    provider: Literal["ollama"] = "ollama"
+    base_url: str = "http://localhost:11434"
+    api_key: str | None = None
+
+
+GenerationConfig = Annotated[
+    MockGenerationConfig
+    | OpenAIGenerationConfig
+    | AnthropicGenerationConfig
+    | OllamaGenerationConfig,
+    Field(discriminator="provider"),
+]
+
+
+class JudgeConfig(BaseModel):
+    """LLM judge configuration for answer evaluation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = "mock"
+    model: str = "mock"
+    temperature: float = 0.0
+
+
+class AnswerEvaluationConfig(BaseModel):
+    """Answer evaluation configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    reference_based: bool = True
+    llm_judge: JudgeConfig | None = None
+    metrics: list[AnswerMetric] = Field(
+        default_factory=lambda: [
+            "faithfulness",
+            "answer_relevance",
+            "context_precision",
+            "context_recall",
+            "correctness",
+            "citation_accuracy",
+        ]
+    )
+
+
+class EvaluationConfig(BaseModel):
+    """Evaluation configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    answer: AnswerEvaluationConfig = Field(default_factory=AnswerEvaluationConfig)
+
+
+class OptimizationConfig(BaseModel):
+    """Optimization configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    primary_metric: OptimizationMetric = "mrr"
+    secondary_metric: OptimizationMetric | None = None
+    constraints: dict[str, float] = Field(default_factory=dict)
+    weights: dict[str, float] = Field(default_factory=dict)
+    baseline_run_id: str | None = None
+
+
+class CaptureConfig(BaseModel):
+    """Telemetry capture configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prompts: bool = False
+    responses: bool = False
+    retrieved_content: bool = False
+    document_content: bool = False
+
+
+class TelemetryConfig(BaseModel):
+    """Telemetry configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    capture: CaptureConfig = Field(default_factory=CaptureConfig)
+
+
+class CacheConfig(BaseModel):
+    """Cache configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    ttl_seconds: int = 3600
+
+
 class RagConfig(BaseModel):
     """Root configuration for a RAG pipeline."""
 
@@ -223,3 +377,8 @@ class RagConfig(BaseModel):
     reranker: RerankerConfig | None = None
     documents: DocumentsConfig | None = None
     experiments: ExperimentConfig | None = None
+    generation: GenerationConfig | None = None
+    evaluation: EvaluationConfig | None = None
+    optimization: OptimizationConfig | None = None
+    telemetry: TelemetryConfig | None = None
+    caching: CacheConfig | None = None

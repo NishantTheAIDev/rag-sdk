@@ -14,6 +14,7 @@ from rag_sdk.retrieval.factory import (
 )
 from rag_sdk.retrieval.fusion import rrf_fuse, weighted_fuse
 from rag_sdk.retrieval.hybrid import HybridRetriever
+from rag_sdk.retrieval.mmr import MMRRetriever
 from rag_sdk.retrieval.parent_child import ParentChildExpander
 from rag_sdk.retrieval.pipeline import RetrievalPipeline
 from rag_sdk.retrieval.sentence_window import SentenceWindowExpander
@@ -23,6 +24,7 @@ __all__ = [
     "BM25Retriever",
     "DenseRetriever",
     "HybridRetriever",
+    "MMRRetriever",
     "ParentChildExpander",
     "RetrievalPipeline",
     "RetrievalResult",

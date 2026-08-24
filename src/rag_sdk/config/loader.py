@@ -39,8 +39,20 @@ def parse_config(text: str) -> RagConfig:
 
 def dump_config(config: RagConfig) -> str:
     """Serialize a configuration to YAML."""
-    return yaml.safe_dump(
-        config.model_dump(mode="json", exclude_none=True), sort_keys=False
+    from yaml import SafeDumper
+
+    class QuotedDumper(SafeDumper):
+        def represent_data(self, data):
+            if isinstance(data, str) and ("\n" in data or "\r" in data):
+                return self.represent_scalar(
+                    "tag:yaml.org,2002:str", data, style='"'
+                )
+            return super().represent_data(data)
+
+    return yaml.dump(
+        config.model_dump(mode="python", exclude_none=True),
+        Dumper=QuotedDumper,
+        sort_keys=False,
     )
 
 
@@ -49,8 +61,55 @@ def default_config() -> RagConfig:
     return RagConfig.model_validate(
         {
             "project": {"name": "rag-project"},
-            "chunking": {"strategy": "recursive", "chunk_size": 512, "overlap": 64},
+            "chunking": {
+                "strategy": "recursive",
+                "chunk_size": 512,
+                "overlap": 64,
+                "separators": ["\n\n", "\n", ". ", " "],
+            },
             "embedding": {"provider": "hash"},
             "retrieval": {"strategy": "dense", "top_k": 5},
+        }
+    )
+
+
+def baseline_config(version: str = "v1") -> RagConfig:
+    """Return the baseline configuration for benchmarking.
+
+    The baseline is a fixed, reproducible configuration:
+    - Recursive chunking (512 tokens, 64 overlap)
+    - Hash embeddings (deterministic, no API key needed)
+    - Dense retrieval (top_k=10)
+    - No reranker
+    - No enrichment
+    - Mock generator for answer generation
+    - Basic retrieval evaluation
+    """
+    if version != "v1":
+        raise ValueError(f"Unknown baseline version: {version}")
+    return RagConfig.model_validate(
+        {
+            "project": {"name": "rag-baseline"},
+            "chunking": {"strategy": "recursive", "chunk_size": 512, "overlap": 64},
+            "embedding": {"provider": "hash"},
+            "retrieval": {
+                "strategy": "dense",
+                "top_k": 10,
+                "auto_merging": {"tokenizer": "whitespace"},
+            },
+            "reranker": {"strategy": "none"},
+            "generation": {"provider": "mock", "model": "mock"},
+            "evaluation": {
+                "answer": {
+                    "enabled": True,
+                    "reference_based": True,
+                    "metrics": [
+                        "faithfulness",
+                        "answer_relevance",
+                        "context_precision",
+                        "context_recall",
+                    ],
+                }
+            },
         }
     )

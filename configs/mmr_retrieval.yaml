@@ -1,0 +1,33 @@
+# MMR (Maximal Marginal Relevance) Retrieval Configuration
+# Balances relevance to query with diversity among results
+
+project:
+  name: mmr-rag
+
+documents:
+  path: ./data/docs
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+  model: BAAI/bge-base-en-v1.5
+
+retrieval:
+  strategy: mmr
+  top_k: 10
+  candidate_k: 50
+  lambda_param: 0.5      # 0 = max diversity, 1 = max relevance (like dense)
+
+# Optional: experiments
+# experiments:
+#   dataset: ./data/queries.jsonl
+#   k: 10
+#   primary_metric: mrr
+#   output_dir: ./runs
+#   parameters:
+#     retrieval.strategy: [dense, mmr]
+#     retrieval.lambda_param: [0.0, 0.3, 0.5, 0.7, 1.0]

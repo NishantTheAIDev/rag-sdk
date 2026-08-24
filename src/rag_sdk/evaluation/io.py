@@ -9,6 +9,9 @@ import json
 from collections.abc import Sequence
 from pathlib import Path
 
+from rag_sdk.dataset import QuerySample
+from rag_sdk.dataset.loader import load_queries
+
 
 def load_retrieval_results(
     path: str | Path,
@@ -42,3 +45,8 @@ def load_retrieval_results(
             raise ValueError(f"Line {line_number}: 'relevant' must be a list of strings")
         samples.append((retrieved, set(relevant)))
     return samples
+
+
+def load_evaluation_samples(path: str | Path) -> list[QuerySample]:
+    """Load evaluation samples (with reference answers) from a JSONL file."""
+    return load_queries(path)
