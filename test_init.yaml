@@ -1,0 +1,28 @@
+project:
+  name: rag-project
+chunking:
+  chunk_size: 512
+  overlap: 64
+  strategy: recursive
+  separators:
+  - "\n\n"
+  - "\n"
+  - '. '
+  - ' '
+embedding:
+  provider: hash
+retrieval:
+  top_k: 5
+  candidate_k: 50
+  sentence_window:
+    enabled: false
+    window_size: 3
+  parent_child:
+    enabled: false
+  auto_merging:
+    enabled: false
+    similarity_threshold: 0.8
+    max_tokens: 512
+    max_chunks: 10
+    tokenizer: whitespace
+  strategy: dense

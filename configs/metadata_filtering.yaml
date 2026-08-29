@@ -1,0 +1,32 @@
+project:
+  name: metadata-filtering-example
+
+documents:
+  path: ./data
+  loader:
+    strategy: text
+  recursive: true
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 5
+  candidate_k: 50
+  filters:
+    category: finance
+    year: 2024
+
+reranker:
+  strategy: none
+
+preprocessing:
+  normalize_whitespace: true
+  cleanup_text: true
+  extract_metadata: true

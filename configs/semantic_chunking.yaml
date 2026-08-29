@@ -1,0 +1,34 @@
+project:
+  name: semantic-chunking-example
+
+documents:
+  path: ./data
+  loader:
+    strategy: text
+  recursive: true
+
+chunking:
+  strategy: semantic
+  chunk_size: 512
+  overlap: 64
+  similarity_threshold: 0.82
+  min_chunk_size: 128
+  max_chunk_size: 1024
+  embedding_provider: sentence-transformers
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 5
+
+reranker:
+  strategy: none
+
+preprocessing:
+  normalize_whitespace: true
+  cleanup_text: true
+  remove_duplicates: true
+  extract_metadata: true

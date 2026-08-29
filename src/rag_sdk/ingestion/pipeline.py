@@ -10,6 +10,7 @@ from rag_sdk.core import Chunk
 if TYPE_CHECKING:
     from rag_sdk.chunking.base import Chunker
     from rag_sdk.chunking.parent_child import ParentChildChunks
+    from rag_sdk.config import PreprocessingConfig
     from rag_sdk.core import Document
     from rag_sdk.embeddings import EmbeddingProvider
     from rag_sdk.indexing import ChunkStore, DocumentStore, VectorStore
@@ -41,8 +42,9 @@ def ingest_documents(
     vector_store: VectorStore,
     chunk_store: ChunkStore | None = None,
     document_store: DocumentStore | None = None,
+    preprocessing_config: PreprocessingConfig | None = None,
 ) -> IngestionResult:
-    """Ingest documents: chunk, embed, index, and persist parents.
+    """Ingest documents: preprocess, chunk, embed, index, and persist parents.
 
     For ParentChildChunker:
     - Children are embedded and added to VectorStore
@@ -55,6 +57,12 @@ def ingest_documents(
     """
     from rag_sdk.chunking.parent_child import ParentChildChunks
     from rag_sdk.chunking.text import compute_sentence_boundaries
+    from rag_sdk.preprocessing import build_preprocessing_pipeline
+
+    # Apply preprocessing if configured
+    if preprocessing_config:
+        pipeline = build_preprocessing_pipeline(preprocessing_config)
+        documents = pipeline.process(documents)
 
     total_chunks = 0
     total_parents = 0

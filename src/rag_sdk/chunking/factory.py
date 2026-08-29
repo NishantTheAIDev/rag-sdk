@@ -6,6 +6,8 @@ from rag_sdk.chunking.base import Chunker
 from rag_sdk.chunking.fixed import FixedTokenChunker
 from rag_sdk.chunking.parent_child import ParentChildChunker, SentenceWindowChunker
 from rag_sdk.chunking.recursive import RecursiveChunker
+from rag_sdk.chunking.semantic import SemanticChunker
+from rag_sdk.chunking.structure import StructureAwareChunker
 from rag_sdk.config import (
     ChunkerConfig,
 )
@@ -16,6 +18,8 @@ chunker_registry.register("recursive", RecursiveChunker)
 chunker_registry.register("fixed", FixedTokenChunker)
 chunker_registry.register("sentence_window", SentenceWindowChunker)
 chunker_registry.register("parent_child", ParentChildChunker)
+chunker_registry.register("semantic", SemanticChunker)
+chunker_registry.register("structure_aware", StructureAwareChunker)
 
 
 def build_chunker(config: ChunkerConfig) -> Chunker:

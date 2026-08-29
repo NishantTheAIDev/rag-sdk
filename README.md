@@ -10,18 +10,24 @@ and evaluation strategies and let the SDK measure what works best for your data.
 ## Features
 
 - Typed YAML configuration validated with Pydantic v2
-- Pluggable chunking: recursive, fixed-token, **sentence window**, **parent-child**
-- `EmbeddingProvider` interface for swappable embedding backends
+- Pluggable chunking: recursive, fixed-token, **sentence window**, **parent-child**, **semantic**, **structure-aware**
+- **Document Ingestion**: PDF (`pypdf`), DOCX (`python-docx`), HTML (`BeautifulSoup` + `readability-lxml`), text, JSON, Markdown
+- **Preprocessing Pipeline**: whitespace normalization, text cleanup, header/footer removal, deduplication, metadata extraction
+- `EmbeddingProvider` interface for swappable embedding backends (Hash, Sentence Transformers)
 - FAISS-backed vector store (`FaissVectorStore`)
 - Dense, BM25, hybrid (RRF/weighted fusion), and **MMR** retrieval
+- **Metadata Filtering** — first-class filters in retrieval config
+- **Multi-Query Retrieval** — LLM-generated query expansion with RRF/weighted fusion
+- **Query Rewriting** — LLM, template, and HyDE (Hypothetical Document Embeddings)
 - **Reranking**: cross-encoder, Cohere v4, or none (baseline)
 - **Context enrichment**: parent-child expansion, sentence window, auto-merging
 - **Generation** (for evaluation): Mock, OpenAI, Anthropic, Ollama providers
 - **Citation support** — preserve source lineage through to generated answers
 - **Context construction** — token-budgeted, deduplicated, metadata-aware
 - **Answer evaluation**: reference-based + LLM-as-judge (faithfulness, relevance, precision, recall, correctness, citation accuracy)
+- **Graded Relevance** — nDCG and MAP with 0-3 relevance grades, dataset versioning
 - **Optimization engine**: Pareto frontier, constraints, weighted scoring, baseline comparison
-- Retrieval metrics: Hit@K, Recall@K, Precision@K, MRR, nDCG, MAP
+- Retrieval metrics: Hit@K, Recall@K, Precision@K, MRR, nDCG, MAP (binary + graded)
 - Configuration-driven experiment engine with parameter sweeps
 - CSV, JSON, leaderboard, and interactive HTML experiment reports
 - Thin `rag` CLI (`init`, `validate`, `evaluate`, `benchmark`, `experiment`, `optimize`, `export-config`)
@@ -469,6 +475,120 @@ retrieval:
   top_k: 10
   candidate_k: 50
   lambda_param: 0.5  # 0 = diversity, 1 = relevance
+```
+
+### 11. PDF Ingestion with Preprocessing
+
+```yaml
+documents:
+  path: ./data/pdfs
+  loader:
+    strategy: pypdf
+    extract_images: false
+    page_chunk_size: 1
+  recursive: true
+
+preprocessing:
+  normalize_whitespace: true
+  cleanup_text: true
+  remove_headers: true
+  remove_duplicates: true
+  extract_metadata: true
+  header_footer_similarity: 0.8
+  duplicate_similarity: 0.95
+```
+
+### 12. Semantic Chunking
+
+```yaml
+chunking:
+  strategy: semantic
+  chunk_size: 512
+  overlap: 64
+  similarity_threshold: 0.82
+  min_chunk_size: 128
+  max_chunk_size: 1024
+  embedding_provider: sentence-transformers
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+```
+
+### 13. Structure-Aware Chunking
+
+```yaml
+documents:
+  path: ./data/html
+  loader:
+    strategy: html
+    extract_main_content: true
+    heading_selectors: ["h1", "h2", "h3", "h4", "h5", "h6"]
+
+chunking:
+  strategy: structure_aware
+  chunk_size: 512
+  overlap: 64
+  include_heading_context: true
+  max_heading_depth: 3
+  split_on_headings: ["h1", "h2", "h3"]
+```
+
+### 14. Metadata Filtering
+
+```yaml
+retrieval:
+  strategy: hybrid
+  top_k: 5
+  candidate_k: 50
+  fusion:
+    method: rrf
+  filters:
+    category: finance
+    year: 2024
+```
+
+### 15. Multi-Query Retrieval
+
+```yaml
+retrieval:
+  strategy: dense
+  top_k: 5
+  candidate_k: 50
+  multi_query:
+    enabled: true
+    num_queries: 3
+    query_generator: llm
+    fusion_method: rrf
+```
+
+### 16. Query Rewriting (HyDE)
+
+```yaml
+retrieval:
+  strategy: dense
+  top_k: 5
+  candidate_k: 50
+  query_rewriter:
+    enabled: true
+    strategy: hyde
+    prompt: "Write a hypothetical document that would perfectly answer the following query.\n\nQuery: {query}\n\nHypothetical document:"
+```
+
+### 17. Graded Relevance Evaluation Dataset
+
+```json
+{
+  "version": "1.0",
+  "metadata": {"source": "internal", "created": "2024-01-15"},
+  "samples": [
+    {
+      "query_id": "q001",
+      "query": "What was the revenue in 2024?",
+      "relevant_documents": ["doc_001"],
+      "relevant_chunks": ["chunk_123", "chunk_124"],
+      "relevance_grades": {"chunk_123": 3, "chunk_124": 2},
+      "reference_answer": "Revenue was $1.2B in 2024."
+    }
+  ]
+}
 ```
 
 ## Pipeline Architecture

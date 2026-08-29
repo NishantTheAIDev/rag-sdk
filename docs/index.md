@@ -7,6 +7,29 @@ The primary goal is to answer **"which RAG configuration works best for my
 data?"** by making chunking, embedding, retrieval, reranking, generation,
 evaluation, and optimization configurable and measurable.
 
+## Features
+
+- **Document Ingestion**: PDF (pypdf), DOCX (python-docx), HTML (BeautifulSoup + readability-lxml), text, JSON, Markdown
+- **Preprocessing Pipeline**: whitespace normalization, text cleanup, header/footer removal, deduplication, metadata extraction
+- **Chunking**: recursive, fixed-token, sentence window, parent-child, **semantic**, **structure-aware**
+- **Embeddings**: Hash (deterministic), Sentence Transformers, pluggable interface
+- **Vector Store**: FAISS (IndexFlatIP, normalized = cosine similarity)
+- **Retrieval**: dense, BM25, hybrid (RRF/weighted fusion), MMR
+- **Metadata Filtering**: first-class filters in retrieval config
+- **Multi-Query Retrieval**: LLM-generated query expansion with RRF/weighted fusion
+- **Query Rewriting**: LLM, template, HyDE (Hypothetical Document Embeddings)
+- **Reranking**: cross-encoder, Cohere v4, or none (baseline)
+- **Context Enrichment**: parent-child expansion, sentence window, auto-merging
+- **Generation** (for evaluation): Mock, OpenAI, Anthropic, Ollama
+- **Citation Support**: preserve source lineage through to generated answers
+- **Context Construction**: token-budgeted, deduplicated, metadata-aware
+- **Answer Evaluation**: reference-based + LLM-as-judge (faithfulness, relevance, precision, recall, correctness, citation accuracy)
+- **Graded Relevance**: nDCG and MAP with 0-3 relevance grades, dataset versioning
+- **Optimization**: Pareto frontier, constraints, weighted scoring, baseline comparison
+- **Metrics**: Hit@K, Recall@K, Precision@K, MRR, nDCG, MAP (binary + graded)
+- **Experiments**: config-driven parameter sweeps with CSV/JSON/HTML reports
+- **CLI**: `init`, `validate`, `evaluate`, `benchmark`, `experiment`, `optimize`, `export-config`
+
 ## Quickstart
 
 Install the package:

@@ -1,0 +1,24 @@
+project:
+  name: docx-ingestion-example
+
+documents:
+  path: ./data/docs
+  loader:
+    strategy: docx
+    include_headers_footers: false
+  recursive: true
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 5
+
+reranker:
+  strategy: none
