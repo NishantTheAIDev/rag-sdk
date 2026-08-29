@@ -1,0 +1,25 @@
+project:
+  name: html-ingestion-example
+
+documents:
+  path: ./data/html
+  loader:
+    strategy: html
+    extract_main_content: true
+    heading_selectors: ["h1", "h2", "h3", "h4", "h5", "h6"]
+  recursive: true
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 5
+
+reranker:
+  strategy: none

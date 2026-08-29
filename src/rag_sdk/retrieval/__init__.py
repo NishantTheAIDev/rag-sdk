@@ -15,8 +15,16 @@ from rag_sdk.retrieval.factory import (
 from rag_sdk.retrieval.fusion import rrf_fuse, weighted_fuse
 from rag_sdk.retrieval.hybrid import HybridRetriever
 from rag_sdk.retrieval.mmr import MMRRetriever
+from rag_sdk.retrieval.multi_query import MultiQueryRetriever
 from rag_sdk.retrieval.parent_child import ParentChildExpander
 from rag_sdk.retrieval.pipeline import RetrievalPipeline
+from rag_sdk.retrieval.query_rewriting import (
+    HyDEQueryRewriter,
+    LLMQueryRewriter,
+    QueryRewriter,
+    QueryRewriterFactory,
+    TemplateQueryRewriter,
+)
 from rag_sdk.retrieval.sentence_window import SentenceWindowExpander
 
 __all__ = [
@@ -24,12 +32,18 @@ __all__ = [
     "BM25Retriever",
     "DenseRetriever",
     "HybridRetriever",
+    "HyDEQueryRewriter",
+    "LLMQueryRewriter",
     "MMRRetriever",
+    "MultiQueryRetriever",
     "ParentChildExpander",
+    "QueryRewriter",
+    "QueryRewriterFactory",
     "RetrievalPipeline",
     "RetrievalResult",
     "Retriever",
     "SentenceWindowExpander",
+    "TemplateQueryRewriter",
     "build_retrieval_pipeline",
     "build_retriever",
     "register_retriever",

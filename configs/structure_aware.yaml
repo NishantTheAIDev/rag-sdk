@@ -1,0 +1,33 @@
+project:
+  name: structure-aware-chunking-example
+
+documents:
+  path: ./data
+  loader:
+    strategy: html
+    extract_main_content: true
+    heading_selectors: ["h1", "h2", "h3", "h4", "h5", "h6"]
+  recursive: true
+
+chunking:
+  strategy: structure_aware
+  chunk_size: 512
+  overlap: 64
+  include_heading_context: true
+  max_heading_depth: 3
+  split_on_headings: ["h1", "h2", "h3", "h4", "h5", "h6"]
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 5
+
+reranker:
+  strategy: none
+
+preprocessing:
+  normalize_whitespace: true
+  cleanup_text: true
+  extract_metadata: true

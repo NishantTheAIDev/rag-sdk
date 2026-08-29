@@ -23,10 +23,16 @@ class FaissVectorStore(VectorStore):
         self._dimension = dimension
         self._index = faiss.IndexFlatIP(dimension)
         self._ids: list[str] = []
+        self._metadata: dict[str, dict] = {}
         # Store embeddings for retrieval by ID (for auto-merging)
         self._embeddings: dict[str, np.ndarray] = {}
 
-    def add(self, ids: Sequence[str], vectors: np.ndarray) -> None:
+    def add(
+        self,
+        ids: Sequence[str],
+        vectors: np.ndarray,
+        metadata: dict[str, dict] | None = None,
+    ) -> None:
         array = np.asarray(vectors, dtype=np.float32)
         if array.ndim != 2 or array.shape[1] != self._dimension:
             raise ValueError(
@@ -41,8 +47,18 @@ class FaissVectorStore(VectorStore):
         # Store embeddings for get_embedding lookup
         for idx, chunk_id in enumerate(ids):
             self._embeddings[chunk_id] = array[idx].copy()
+# Store metadata for filtering
+        if metadata:
+            for _idx, chunk_id in enumerate(ids):
+                if chunk_id in metadata:
+                    self._metadata[chunk_id] = metadata[chunk_id]
 
-    def search(self, vector: np.ndarray, k: int) -> list[tuple[str, float]]:
+    def search(
+        self,
+        vector: np.ndarray,
+        k: int,
+        filters: dict[str, str | int | float | bool | list[str] | list[int]] | None = None,
+    ) -> list[tuple[str, float]]:
         if k < 1:
             return []
         if len(self) == 0:
@@ -52,12 +68,47 @@ class FaissVectorStore(VectorStore):
             raise ValueError(
                 f"query vector must have {self._dimension} dimensions, got {query.shape[1]}"
             )
-        limit = min(k, len(self))
+
+        # If filters are provided, we need to filter before searching
+        # For FAISS, we'll do post-filtering (search more, then filter)
+        limit = min(k * 10, len(self)) if filters else min(k, len(self))
+
         scores, indices = self._index.search(query, limit)
-        return [
-            (self._ids[i], float(score))
-            for score, i in zip(scores[0], indices[0], strict=True)
-        ]
+        
+        results = []
+        for score, i in zip(scores[0], indices[0], strict=True):
+            if i == -1:
+                continue
+            chunk_id = self._ids[i]
+            
+            # Apply metadata filters
+            if filters:
+                chunk_meta = self._metadata.get(chunk_id, {})
+                if not self._matches_filters(chunk_meta, filters):
+                    continue
+            
+            results.append((chunk_id, float(score)))
+            if len(results) >= k:
+                break
+        
+        return results
+
+    def _matches_filters(
+        self,
+        metadata: dict,
+        filters: dict[str, str | int | float | bool | list[str] | list[int]],
+    ) -> bool:
+        """Check if metadata matches all filters."""
+        for key, value in filters.items():
+            if key not in metadata:
+                return False
+            meta_value = metadata[key]
+            if isinstance(value, list):
+                if meta_value not in value:
+                    return False
+            elif meta_value != value:
+                return False
+        return True
 
     def __len__(self) -> int:
         return self._index.ntotal

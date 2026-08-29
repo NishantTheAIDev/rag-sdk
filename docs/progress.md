@@ -252,3 +252,79 @@ Tracks completed phases and the tasks delivered in each. Phases follow
 - Documentation
   - Updated `docs/progress.md`, `README.md`, `docs/api.md`, `docs/index.md`
   - Example configs: `configs/phase4.yaml` (full pipeline with generation + eval + optimization)
+
+## Phase 5 — Document ingestion, preprocessing, advanced chunking, advanced retrieval (COMPLETE)
+
+- Document Ingestion
+  - `DocumentLoader` ABC with pluggable registry (`loader_registry`, `build_loader`)
+  - `PyPDFLoader` — PDF extraction using `pypdf` (page-level metadata)
+  - `DocxLoader` — DOCX extraction using `python-docx` (heading hierarchy)
+  - `HTMLLoader` — HTML extraction using `BeautifulSoup` + `readability-lxml` (main content, title, headings)
+  - `TextLoader`, `JSONLoader` — existing loaders now in registry
+  - Config: `DocumentsConfig` with `loader`, `recursive`, `glob_pattern`
+
+- Preprocessing Pipeline
+  - `Preprocessor` ABC with pluggable registry (`preprocessor_registry`)
+  - `WhitespaceNormalizer` — collapse whitespace, normalize newlines
+  - `TextCleanup` — remove control chars, fix encoding, unicode normalization
+  - `HeaderFooterRemover` — detect repeated headers/footers across docs
+  - `DuplicateDetector` — exact hash deduplication (semantic optional)
+  - `MetadataExtractor` — extract emails, URLs, dates, titles from text
+  - Fixed pipeline order: normalize → cleanup → headers → duplicates → metadata
+  - Config: `PreprocessingConfig` under `RagConfig.preprocessing`
+
+- Semantic Chunking
+  - `SemanticChunker` — embedding-based similarity threshold chunking
+  - Algorithm: sentence split → embed → cosine similarity → group by threshold
+  - Config: `SemanticChunkerConfig` (similarity_threshold, min/max_chunk_size)
+  - Uses global `RagConfig.embedding` provider
+  - Respects size constraints with fallback splitting
+
+- Structure-Aware Chunking
+  - `StructureAwareChunker` — respects heading hierarchy from ingestion
+  - Preserves section hierarchy in chunk metadata (`section_hierarchy`)
+  - Config: `StructureAwareChunkerConfig` (include_heading_context, max_heading_depth)
+
+- Metadata Filtering
+  - First-class `filters` dict in `RetrievalConfigBase`
+  - Native FAISS metadata filtering with post-filter fallback
+  - Supported in Dense, BM25, Hybrid, MMR retrievers
+
+- Multi-Query Retrieval
+  - `MultiQueryRetriever` wrapper generating N queries from one
+  - LLM-based query generation using `RagConfig.generation`
+  - RRF or weighted fusion of results
+  - Config: `MultiQueryConfig` under `RetrievalConfigBase`
+
+- Query Rewriting
+  - `QueryRewriter` ABC with pluggable registry
+  - `LLMQueryRewriter` — LLM-based query expansion/rewriting
+  - `TemplateQueryRewriter` — template-based transformation
+  - `HyDEQueryRewriter` — Hypothetical Document Embeddings
+  - Integrated in retrieval pipeline before embedding
+  - Config: `QueryRewriterConfig` under `RetrievalConfigBase`
+
+- Graded Relevance & Dataset Versioning
+  - `QuerySample.relevance_grades` for chunk-level graded relevance (0-3)
+  - `EvaluationDataset` with `version`, `metadata`, `samples`
+  - `load_dataset()` for full dataset with metadata
+  - `ndcg_at_k` supports graded relevance, added `map_graded` metric
+
+- External Tests
+  - `tests/external/` with real PDF/DOCX/HTML fixtures
+  - Download script: `tests/external/download_fixtures.py`
+  - Run with: `uv run pytest tests/external -m external`
+  - Semantic chunking quality tests with real embeddings
+
+- Documentation
+  - Example configs: `pdf_ingestion.yaml`, `docx_ingestion.yaml`, `html_ingestion.yaml`,
+    `semantic_chunking.yaml`, `structure_aware.yaml`, `metadata_filtering.yaml`,
+    `multi_query.yaml`, `query_rewriting.yaml`
+
+- Tests
+  - All 200+ tests passing (unit + integration + external)
+  - External tests with real documents for extraction quality verification
+
+- Verification
+  - `ruff check .` clean
+  - `pytest` — 200+ tests passing on Python 3.14

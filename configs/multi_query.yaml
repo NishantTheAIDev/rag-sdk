@@ -1,0 +1,40 @@
+project:
+  name: multi-query-example
+
+documents:
+  path: ./data
+  loader:
+    strategy: text
+  recursive: true
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 5
+  candidate_k: 50
+  multi_query:
+    enabled: true
+    num_queries: 3
+    query_generator: llm
+    fusion_method: rrf
+
+reranker:
+  strategy: none
+
+generation:
+  provider: mock
+  model: mock
+  temperature: 0.0
+  max_tokens: 512
+  canned_response: "Query 1\nQuery 2\nQuery 3"
+
+preprocessing:
+  normalize_whitespace: true
+  cleanup_text: true

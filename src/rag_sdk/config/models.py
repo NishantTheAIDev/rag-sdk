@@ -71,11 +71,31 @@ class ParentChildChunkerConfig(ChunkerConfigBase):
     child_overlap: int = Field(default=32, ge=0)
 
 
+class SemanticChunkerConfig(ChunkerConfigBase):
+    strategy: Literal["semantic"] = "semantic"
+    similarity_threshold: float = Field(default=0.82, ge=0.0, le=1.0)
+    min_chunk_size: int = Field(default=128, ge=1)
+    max_chunk_size: int = Field(default=1024, ge=1)
+    embedding_provider: str = "hash"
+    embedding_model: str | None = None
+
+
+class StructureAwareChunkerConfig(ChunkerConfigBase):
+    strategy: Literal["structure_aware"] = "structure_aware"
+    include_heading_context: bool = True
+    max_heading_depth: int = Field(default=3, ge=1)
+    split_on_headings: list[str] = Field(
+        default_factory=lambda: ["h1", "h2", "h3", "h4", "h5", "h6"]
+    )
+
+
 ChunkerConfig = Annotated[
     RecursiveChunkerConfig
     | FixedTokenChunkerConfig
     | SentenceWindowChunkerConfig
-    | ParentChildChunkerConfig,
+    | ParentChildChunkerConfig
+    | SemanticChunkerConfig
+    | StructureAwareChunkerConfig,
     Field(discriminator="strategy"),
 ]
 
@@ -93,6 +113,9 @@ class RetrievalConfigBase(BaseModel):
 
     top_k: int = Field(default=5, ge=1)
     candidate_k: int = Field(default=50, ge=1)
+    filters: dict[str, str | int | float | bool | list[str] | list[int]] = Field(
+        default_factory=dict
+    )
     sentence_window: SentenceWindowExpansionConfig = Field(
         default_factory=lambda: SentenceWindowExpansionConfig()
     )
@@ -102,6 +125,32 @@ class RetrievalConfigBase(BaseModel):
     auto_merging: AutoMergingConfig = Field(
         default_factory=lambda: AutoMergingConfig()
     )
+    multi_query: MultiQueryConfig = Field(default_factory=lambda: MultiQueryConfig())
+    query_rewriter: QueryRewriterConfig = Field(default_factory=lambda: QueryRewriterConfig())
+
+
+class MultiQueryConfig(BaseModel):
+    """Multi-query retrieval configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    num_queries: int = Field(default=3, ge=1, le=10)
+    query_generator: Literal["llm", "template"] = "llm"
+    template: str | None = None
+    fusion_method: Literal["rrf", "weighted"] = "rrf"
+
+
+class QueryRewriterConfig(BaseModel):
+    """Query rewriting configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    strategy: Literal["llm", "template", "hyde"] = "llm"
+    model: str | None = None
+    template: str | None = None
+    prompt: str | None = None
 
 
 class DenseRetrievalConfig(RetrievalConfigBase):
@@ -186,12 +235,57 @@ RetrievalConfig = Annotated[
 ]
 
 
+class DocumentLoaderConfigBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    strategy: str
+
+
+class TextLoaderConfig(DocumentLoaderConfigBase):
+    strategy: Literal["text"] = "text"
+
+
+class JSONLoaderConfig(DocumentLoaderConfigBase):
+    strategy: Literal["json"] = "json"
+
+
+class PyPDFLoaderConfig(DocumentLoaderConfigBase):
+    strategy: Literal["pypdf"] = "pypdf"
+    extract_images: bool = False
+    page_chunk_size: int = Field(default=1, ge=1)
+
+
+class DocxLoaderConfig(DocumentLoaderConfigBase):
+    strategy: Literal["docx"] = "docx"
+    include_headers_footers: bool = False
+
+
+class HTMLLoaderConfig(DocumentLoaderConfigBase):
+    strategy: Literal["html"] = "html"
+    extract_main_content: bool = True
+    heading_selectors: list[str] = Field(
+        default_factory=lambda: ["h1", "h2", "h3", "h4", "h5", "h6"]
+    )
+
+
+DocumentLoaderConfig = Annotated[
+    TextLoaderConfig
+    | JSONLoaderConfig
+    | PyPDFLoaderConfig
+    | DocxLoaderConfig
+    | HTMLLoaderConfig,
+    Field(discriminator="strategy"),
+]
+
+
 class DocumentsConfig(BaseModel):
     """Source corpus for experiments."""
 
     model_config = ConfigDict(extra="forbid")
 
     path: str
+    loader: DocumentLoaderConfig = Field(default_factory=TextLoaderConfig)
+    recursive: bool = True
+    glob_pattern: str = "**/*"
 
 
 class RerankerConfigBase(BaseModel):
@@ -336,6 +430,20 @@ class OptimizationConfig(BaseModel):
     baseline_run_id: str | None = None
 
 
+class PreprocessingConfig(BaseModel):
+    """Preprocessing pipeline configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    normalize_whitespace: bool = True
+    cleanup_text: bool = True
+    remove_headers: bool = False
+    remove_duplicates: bool = False
+    extract_metadata: bool = False
+    header_footer_similarity: float = Field(default=0.8, ge=0.0, le=1.0)
+    duplicate_similarity: float = Field(default=0.95, ge=0.0, le=1.0)
+
+
 class CaptureConfig(BaseModel):
     """Telemetry capture configuration."""
 
@@ -382,3 +490,4 @@ class RagConfig(BaseModel):
     optimization: OptimizationConfig | None = None
     telemetry: TelemetryConfig | None = None
     caching: CacheConfig | None = None
+    preprocessing: PreprocessingConfig | None = None

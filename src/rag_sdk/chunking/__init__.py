@@ -11,6 +11,8 @@ from rag_sdk.chunking.parent_child import (
     SentenceWindowChunker,
 )
 from rag_sdk.chunking.recursive import RecursiveChunker
+from rag_sdk.chunking.semantic import SemanticChunker
+from rag_sdk.chunking.structure import StructureAwareChunker
 from rag_sdk.chunking.text import (
     Cl100kBaseTokenizer,
     Tokenizer,
@@ -27,7 +29,9 @@ __all__ = [
     "ParentChildChunker",
     "ParentChildChunks",
     "RecursiveChunker",
+    "SemanticChunker",
     "SentenceWindowChunker",
+    "StructureAwareChunker",
     "Tokenizer",
     "WhitespaceTokenizer",
     "build_chunker",

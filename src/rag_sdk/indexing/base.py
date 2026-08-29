@@ -16,8 +16,19 @@ class VectorStore(ABC):
         """Add ``vectors`` (``(n, dim)`` float32) associated with ``ids``."""
 
     @abstractmethod
-    def search(self, vector: np.ndarray, k: int) -> list[tuple[str, float]]:
-        """Return up to ``k`` ``(id, score)`` pairs, highest score first."""
+    def search(
+        self,
+        vector: np.ndarray,
+        k: int,
+        filters: dict[str, str | int | float | bool | list[str] | list[int]] | None = None,
+    ) -> list[tuple[str, float]]:
+        """Return up to ``k`` ``(id, score)`` pairs, highest score first.
+
+        Args:
+            vector: Query vector.
+            k: Number of results to return.
+            filters: Optional metadata filters (e.g., {"category": "finance", "year": 2024}).
+        """
 
     @abstractmethod
     def __len__(self) -> int:

@@ -1,0 +1,39 @@
+project:
+  name: query-rewriting-example
+
+documents:
+  path: ./data
+  loader:
+    strategy: text
+  recursive: true
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 5
+  candidate_k: 50
+  query_rewriter:
+    enabled: true
+    strategy: hyde
+    prompt: "Write a hypothetical document that would perfectly answer the following query.\n\nQuery: {query}\n\nHypothetical document:"
+
+reranker:
+  strategy: none
+
+generation:
+  provider: mock
+  model: mock
+  temperature: 0.0
+  max_tokens: 512
+  canned_response: "This is a hypothetical document about the query topic. It contains relevant information that would help answer the question."
+
+preprocessing:
+  normalize_whitespace: true
+  cleanup_text: true

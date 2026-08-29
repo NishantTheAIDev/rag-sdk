@@ -1,0 +1,25 @@
+project:
+  name: pdf-ingestion-example
+
+documents:
+  path: ./data/pdfs
+  loader:
+    strategy: pypdf
+    extract_images: false
+    page_chunk_size: 1
+  recursive: true
+
+chunking:
+  strategy: recursive
+  chunk_size: 512
+  overlap: 64
+
+embedding:
+  provider: hash
+
+retrieval:
+  strategy: dense
+  top_k: 5
+
+reranker:
+  strategy: none

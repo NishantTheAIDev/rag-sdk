@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DocumentMetadata(BaseModel):
     """Document-level metadata preserved through chunking and indexing."""
+
+    model_config = ConfigDict(extra="allow")
 
     source: str | None = None
     title: str | None = None
@@ -18,6 +20,12 @@ class DocumentMetadata(BaseModel):
     chunk_type: str | None = None  # "parent" | "child" | None
     # Sentence window expansion
     sentence_boundaries: list[tuple[int, int]] = Field(default_factory=list)
+    # Structure-aware chunking
+    section_hierarchy: str | None = None
+    # Extracted metadata
+    emails: list[str] = Field(default_factory=list)
+    urls: list[str] = Field(default_factory=list)
+    dates: list[str] = Field(default_factory=list)
 
 
 class Document(BaseModel):

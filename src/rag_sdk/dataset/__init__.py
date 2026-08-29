@@ -15,3 +15,22 @@ class QuerySample(BaseModel):
     relevant_chunks: list[str] = Field(default_factory=list)
     reference_answer: str | None = None
     query_id: str | None = None
+    # Graded relevance: chunk_id -> relevance grade (0-3)
+    relevance_grades: dict[str, int] = Field(default_factory=dict)
+
+
+class EvaluationDataset(BaseModel):
+    """Complete evaluation dataset with metadata and versioning."""
+
+    version: str = "1.0"
+    metadata: dict = Field(default_factory=dict)
+    samples: list[QuerySample] = Field(default_factory=list)
+
+
+__all__ = [
+    "QuerySample",
+    "EvaluationDataset",
+    "DatasetError",
+    "load_queries",
+    "load_dataset",
+]
