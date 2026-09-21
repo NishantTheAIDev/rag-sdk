@@ -139,6 +139,7 @@ class MultiQueryConfig(BaseModel):
     query_generator: Literal["llm", "template"] = "llm"
     template: str | None = None
     fusion_method: Literal["rrf", "weighted"] = "rrf"
+    rrf_k: int = Field(default=60, ge=1)
 
 
 class QueryRewriterConfig(BaseModel):

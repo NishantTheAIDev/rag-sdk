@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import re
 
 from rag_sdk.chunking.base import Chunker
 from rag_sdk.config import StructureAwareChunkerConfig
 from rag_sdk.core import Chunk, Document
-
-if TYPE_CHECKING:
-    pass
 
 
 class StructureAwareChunker(Chunker):
@@ -53,18 +50,14 @@ class StructureAwareChunker(Chunker):
         
         if not headings:
             # No headings found, fall back to recursive chunking
-            from rag_sdk.chunking.recursive import RecursiveChunker
-            fallback = RecursiveChunker(chunk_size=self.chunk_size, overlap=self.overlap)
-            return fallback.chunk(document)
+            return self._fallback_chunk(document)
 
         # Find heading positions in text
         heading_positions = self._find_heading_positions(document.text, headings)
         
         if not heading_positions:
             # Could not locate headings, fall back
-            from rag_sdk.chunking.recursive import RecursiveChunker
-            fallback = RecursiveChunker(chunk_size=self.chunk_size, overlap=self.overlap)
-            return fallback.chunk(document)
+            return self._fallback_chunk(document)
 
         # Build sections from headings
         sections = self._build_sections(document, heading_positions)
@@ -82,28 +75,41 @@ class StructureAwareChunker(Chunker):
         
         return all_chunks
 
+    def _fallback_chunk(self, document: Document) -> list[Chunk]:
+        from rag_sdk.chunking.recursive import RecursiveChunker
+        from rag_sdk.config import RecursiveChunkerConfig
+
+        fallback = RecursiveChunker(
+            RecursiveChunkerConfig(
+                strategy="recursive", chunk_size=self.chunk_size, overlap=self.overlap
+            )
+        )
+        return fallback.chunk(document)
+
     def _find_heading_positions(
         self, text: str, headings: list[str]
     ) -> list[tuple[str, int, int]]:
-        """Find positions of headings in the document text."""
-        positions = []
+        """Locate headings in document order.
+
+        A heading must occupy a whole line (optionally with a Markdown ``#``
+        prefix), and each heading is searched after the previous match, so
+        body text that merely mentions a heading's words is not mistaken for
+        it and repeated headings resolve to successive occurrences.
+        """
+        positions: list[tuple[str, int, int]] = []
+        cursor = 0
         for heading in headings:
-            # Try exact match first
-            pos = text.find(heading)
-            if pos >= 0:
-                positions.append((heading, pos, pos + len(heading)))
+            title = heading.strip()
+            if not title:
                 continue
-            
-            # Try with markdown prefix
-            for prefix in ["# ", "## ", "### ", "#### ", "##### ", "###### "]:
-                marked = prefix + heading
-                pos = text.find(marked)
-                if pos >= 0:
-                    positions.append((heading, pos, pos + len(marked)))
-                    break
-        
-        # Sort by position
-        positions.sort(key=lambda x: x[1])
+            pattern = re.compile(
+                rf"^[ \t]*(?:#{{1,6}}[ \t]+)?{re.escape(title)}[ \t]*$", re.MULTILINE
+            )
+            match = pattern.search(text, cursor)
+            if match is None:
+                continue
+            positions.append((title, match.start(), match.end()))
+            cursor = match.end()
         return positions
 
     def _build_sections(
@@ -119,7 +125,9 @@ class StructureAwareChunker(Chunker):
                 if i + 1 < len(heading_positions)
                 else len(document.text)
             )
-            section_text = document.text[end:next_start].strip()
+            raw = document.text[end:next_start]
+            leading = len(raw) - len(raw.lstrip())
+            section_text = raw.strip()
             
             # Build heading context (breadcrumb)
             heading_context = heading
@@ -132,20 +140,22 @@ class StructureAwareChunker(Chunker):
                 "heading": heading,
                 "heading_context": heading_context,
                 "text": section_text,
-                "start_char": end,
-                "end_char": next_start,
+                "start_char": end + leading,
+                "end_char": end + leading + len(section_text),
             })
         
         # Handle content before first heading
         if heading_positions and heading_positions[0][1] > 0:
-            first_text = document.text[:heading_positions[0][1]].strip()
+            raw = document.text[:heading_positions[0][1]]
+            first_text = raw.strip()
             if first_text:
+                leading = len(raw) - len(raw.lstrip())
                 sections.insert(0, {
                     "heading": "",
                     "heading_context": "",
                     "text": first_text,
-                    "start_char": 0,
-                    "end_char": heading_positions[0][1],
+                    "start_char": leading,
+                    "end_char": leading + len(first_text),
                 })
         
         return sections

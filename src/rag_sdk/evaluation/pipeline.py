@@ -43,6 +43,7 @@ class EvaluationPipeline:
             store,
             chunk_store=chunk_store,
             document_store=document_store,
+            preprocessing_config=self._config.preprocessing,
         )
 
         # Build retrieval pipeline

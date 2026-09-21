@@ -6,7 +6,7 @@ import faiss
 import numpy as np
 
 from rag_sdk.config import MMRRetrievalConfig
-from rag_sdk.core import Chunk
+from rag_sdk.core import Chunk, matches_filters
 from rag_sdk.indexing import VectorStore
 from rag_sdk.retrieval.base import RetrievalResult, Retriever
 
@@ -67,7 +67,19 @@ class MMRRetriever(Retriever):
         scores = self._embeddings @ query_embedding.T
         scores = scores.flatten()
 
-        candidate_indices = np.argsort(scores)[::-1][:candidate_k]
+        ranked = np.argsort(scores)[::-1]
+        if self._config.filters:
+            ranked = np.array(
+                [
+                    idx
+                    for idx in ranked
+                    if matches_filters(self._chunks[idx].metadata, self._config.filters)
+                ],
+                dtype=np.int64,
+            )
+            if ranked.size == 0:
+                return []
+        candidate_indices = ranked[:candidate_k]
         candidate_scores = scores[candidate_indices]
 
         selected = self._mmr_select(

@@ -88,7 +88,11 @@ def ingest_documents(
             child_texts = [c.text for c in chunked.children]
             child_vectors = embedding_provider.embed(child_texts)
             child_ids = [c.id for c in chunked.children]
-            vector_store.add(child_ids, child_vectors)
+            vector_store.add(
+                child_ids,
+                child_vectors,
+                {c.id: c.metadata.model_dump() for c in chunked.children},
+            )
 
             # Persist parents to ChunkStore only
             if chunk_store:
@@ -103,7 +107,7 @@ def ingest_documents(
             texts = [c.text for c in flat_chunks]
             vectors = embedding_provider.embed(texts)
             ids = [c.id for c in flat_chunks]
-            vector_store.add(ids, vectors)
+            vector_store.add(ids, vectors, {c.id: c.metadata.model_dump() for c in flat_chunks})
 
             total_chunks += len(flat_chunks)
             all_chunks.extend(flat_chunks)

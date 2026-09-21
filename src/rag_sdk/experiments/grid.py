@@ -8,11 +8,19 @@ from dataclasses import dataclass, field
 
 from rag_sdk.config import (
     BM25RetrievalConfig,
+    CohereRerankerConfig,
+    CrossEncoderRerankerConfig,
     DenseRetrievalConfig,
     FixedTokenChunkerConfig,
     HybridRetrievalConfig,
+    MMRRetrievalConfig,
+    NoRerankerConfig,
+    ParentChildChunkerConfig,
     RagConfig,
     RecursiveChunkerConfig,
+    SemanticChunkerConfig,
+    SentenceWindowChunkerConfig,
+    StructureAwareChunkerConfig,
 )
 from rag_sdk.config.loader import ConfigError
 
@@ -20,8 +28,16 @@ _VARIANT_DEFAULTS = {
     "dense": DenseRetrievalConfig,
     "bm25": BM25RetrievalConfig,
     "hybrid": HybridRetrievalConfig,
+    "mmr": MMRRetrievalConfig,
     "recursive": RecursiveChunkerConfig,
     "fixed": FixedTokenChunkerConfig,
+    "sentence_window": SentenceWindowChunkerConfig,
+    "parent_child": ParentChildChunkerConfig,
+    "semantic": SemanticChunkerConfig,
+    "structure_aware": StructureAwareChunkerConfig,
+    "none": NoRerankerConfig,
+    "cross_encoder": CrossEncoderRerankerConfig,
+    "cohere": CohereRerankerConfig,
 }
 
 
@@ -135,6 +151,8 @@ def _strategy_for(config: RagConfig, dot_path: str) -> str | None:
         return config.retrieval.strategy
     if dot_path.startswith("chunking."):
         return config.chunking.strategy
+    if dot_path.startswith("reranker.") and config.reranker is not None:
+        return config.reranker.strategy
     return None
 
 
@@ -147,4 +165,5 @@ def _variant_default(name: object) -> dict[str, object]:
     if not isinstance(name, str) or name not in _VARIANT_DEFAULTS:
         raise ConfigError(f"Unknown strategy for experiment sweep: {name!r}")
     model = _VARIANT_DEFAULTS[name]
-    return model().model_dump(mode="json")
+    # Some variants declare ``strategy`` without a default, so pass it explicitly.
+    return model.model_validate({"strategy": name}).model_dump(mode="json")

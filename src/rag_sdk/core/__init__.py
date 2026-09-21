@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from rag_sdk.core.citations import Citation, CitedAnswer
 from rag_sdk.core.documents import Chunk, Document, DocumentMetadata
+from rag_sdk.core.filters import MetadataFilters, matches_filters
 from rag_sdk.core.registry import Registry
 
 __all__ = [
     "Chunk",
     "Document",
     "DocumentMetadata",
+    "MetadataFilters",
     "Registry",
     "Citation",
     "CitedAnswer",
+    "matches_filters",
 ]

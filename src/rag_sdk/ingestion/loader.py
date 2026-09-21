@@ -10,13 +10,9 @@ from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-from rag_sdk.config import DocumentLoaderConfig
+from rag_sdk.config import DocumentLoaderConfig, HTMLLoaderConfig
 from rag_sdk.core import Document, DocumentMetadata, Registry
-
-if TYPE_CHECKING:
-    pass
 
 
 class IngestionError(ValueError):
@@ -178,17 +174,26 @@ class HTMLLoader(DocumentLoader):
             if text:
                 headings.append(text)
 
-        # Try readability-lxml for main content extraction
+        extract_main = not isinstance(config, HTMLLoaderConfig) or config.extract_main_content
+
+        # Try readability-lxml for main content extraction. ``summary()``
+        # returns an HTML fragment, so it is converted to plain text here.
         main_text = ""
-        try:
-            from readability import Document as ReadabilityDocument
-            read_doc = ReadabilityDocument(html_content)
-            main_text = read_doc.summary()
-            # Use readability title if available
-            if read_doc.short_title():
-                title = read_doc.short_title()
-        except ImportError:
-            pass  # fallback to BeautifulSoup
+        if extract_main:
+            try:
+                from readability import Document as ReadabilityDocument
+
+                read_doc = ReadabilityDocument(html_content)
+                summary_html = read_doc.summary(html_partial=True)
+                main_text = BeautifulSoup(summary_html, "lxml").get_text(
+                    separator="\n", strip=True
+                )
+                if read_doc.short_title():
+                    title = read_doc.short_title()
+            except ImportError:
+                pass  # fallback to BeautifulSoup
+            except Exception:  # readability can fail on unusual markup
+                main_text = ""
 
         if not main_text:
             # Fallback: use BeautifulSoup to extract text
@@ -227,14 +232,36 @@ def build_loader(config: DocumentLoaderConfig) -> DocumentLoader:
     return loader_type()
 
 
-def load_documents(path: str | Path, config: DocumentLoaderConfig | None = None) -> list[Document]:
+_LOADER_SUFFIXES: dict[str, frozenset[str]] = {
+    "text": frozenset({".txt", ".md"}),
+    "json": frozenset({".json"}),
+    "pypdf": frozenset({".pdf"}),
+    "docx": frozenset({".docx"}),
+    "html": frozenset({".html", ".htm"}),
+}
+
+
+def load_documents(
+    path: str | Path,
+    config: DocumentLoaderConfig | None = None,
+    *,
+    recursive: bool = False,
+    glob_pattern: str = "*",
+) -> list[Document]:
     """Load all documents from a directory or file using the configured loader.
 
-    Backward-compatible default: TextLoader for .txt/.md, JSONLoader for .json.
+    Without ``config`` the legacy behaviour applies: a single file is loaded by
+    extension, and a directory loads its top-level ``.txt``/``.md`` files.
+    With ``config``, a directory is scanned with ``glob_pattern`` (descending
+    into subdirectories only when ``recursive``) and every file whose
+    extension the configured loader supports is loaded.
     """
     source = Path(path)
     if not source.exists():
         raise IngestionError(f"Document path does not exist: {source}")
+
+    if config is not None and source.is_dir():
+        return _load_directory(source, config, recursive=recursive, glob_pattern=glob_pattern)
 
     if config is None:
         # Backward compatibility: auto-detect by extension
@@ -255,6 +282,40 @@ def load_documents(path: str | Path, config: DocumentLoaderConfig | None = None)
 
 
 register_loader = loader_registry.decorator
+
+
+def _load_directory(
+    source: Path,
+    config: DocumentLoaderConfig,
+    *,
+    recursive: bool,
+    glob_pattern: str,
+) -> list[Document]:
+    suffixes = _LOADER_SUFFIXES.get(config.strategy)
+    files = sorted(
+        file
+        for file in source.glob(glob_pattern)
+        if file.is_file()
+        and (recursive or file.parent == source)
+        and (suffixes is None or file.suffix.lower() in suffixes)
+    )
+    if not files:
+        expected = ", ".join(sorted(suffixes)) if suffixes else "matching"
+        raise IngestionError(
+            f"No {expected} files matching {glob_pattern!r} found in {source}"
+        )
+    loader = build_loader(config)
+    documents: list[Document] = []
+    seen: dict[str, Path] = {}
+    for file in files:
+        for document in loader.load(file, config):
+            if document.id in seen:
+                raise IngestionError(
+                    f"Duplicate document id {document.id!r} from {file} and {seen[document.id]}"
+                )
+            seen[document.id] = file
+            documents.append(document)
+    return documents
 
 
 def _load_text_file(path: Path) -> Document:
