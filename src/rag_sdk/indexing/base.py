@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 
@@ -12,8 +12,16 @@ class VectorStore(ABC):
     """Stores vectors and returns nearest neighbors for a query vector."""
 
     @abstractmethod
-    def add(self, ids: Sequence[str], vectors: np.ndarray) -> None:
-        """Add ``vectors`` (``(n, dim)`` float32) associated with ``ids``."""
+    def add(
+        self,
+        ids: Sequence[str],
+        vectors: np.ndarray,
+        metadata: Mapping[str, Mapping[str, object]] | None = None,
+    ) -> None:
+        """Add ``vectors`` (``(n, dim)`` float32) associated with ``ids``.
+
+        ``metadata`` optionally maps ids to metadata used by ``search`` filters.
+        """
 
     @abstractmethod
     def search(

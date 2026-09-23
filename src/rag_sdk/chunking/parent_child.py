@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from rag_sdk.chunking.base import Chunker, build_chunks
 from rag_sdk.chunking.recursive import RecursiveChunker
 from rag_sdk.chunking.text import apply_overlap, recursive_split
-from rag_sdk.config import ParentChildChunkerConfig, SentenceWindowChunkerConfig
+from rag_sdk.config import (
+    ParentChildChunkerConfig,
+    RecursiveChunkerConfig,
+    SentenceWindowChunkerConfig,
+)
 from rag_sdk.core import Chunk, Document
 
 
@@ -35,9 +39,12 @@ class ParentChildChunker(Chunker):
         separators: list[str] | None = None,
     ) -> None:
         self._parent_chunker = RecursiveChunker(
-            chunk_size=parent_chunk_size,
-            overlap=parent_overlap,
-            separators=separators or ["\n\n", "\n", ". ", " "],
+            RecursiveChunkerConfig(
+                strategy="recursive",
+                chunk_size=parent_chunk_size,
+                overlap=parent_overlap,
+                separators=separators or ["\n\n", "\n", ". ", " "],
+            )
         )
         self._child_chunk_size = child_chunk_size
         self._child_overlap = child_overlap

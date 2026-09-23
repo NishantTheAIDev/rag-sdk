@@ -142,7 +142,12 @@ def experiment(
             f"{config} has no 'documents.path' section pointing at a corpus"
         )
     try:
-        documents = load_documents(loaded.documents.path)
+        documents = load_documents(
+            loaded.documents.path,
+            loaded.documents.loader,
+            recursive=loaded.documents.recursive,
+            glob_pattern=loaded.documents.glob_pattern,
+        )
     except IngestionError as exc:
         raise typer.BadParameter(str(exc)) from exc
 

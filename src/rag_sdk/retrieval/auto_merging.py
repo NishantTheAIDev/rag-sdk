@@ -41,6 +41,10 @@ class AutoMerger:
         self._config = config
         self._tokenizer = get_tokenizer(config.tokenizer)
 
+    def expand(self, results: Sequence[RetrievalResult]) -> list[RetrievalResult]:
+        """Enricher entry point used by :class:`RetrievalPipeline`."""
+        return self.merge(results)
+
     def merge(self, results: Sequence[RetrievalResult]) -> list[RetrievalResult]:
         # Group by document_id of SOURCE chunks (not current chunks after parent expansion)
         # The source chunk ID is always available and points to an indexed chunk

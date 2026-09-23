@@ -27,18 +27,14 @@ class DuplicateDetector(Preprocessor):
             if self.use_hash:
                 doc_hash = self._hash_document(doc)
                 if doc_hash in seen_hashes:
-                    continue  # Skip exact duplicate
+                    continue  # exact duplicate
                 seen_hashes.add(doc_hash)
-            else:
-                # Check against existing unique docs using similarity
-                is_duplicate = False
-                for existing in unique_docs:
-                    if self._similarity(doc.text, existing.text) >= self.similarity_threshold:
-                        is_duplicate = True
-                        break
-                if is_duplicate:
-                    continue
-
+            # Near-duplicate check; a threshold of 1.0 means exact matches only.
+            if self.similarity_threshold < 1.0 and any(
+                self._similarity(doc.text, existing.text) >= self.similarity_threshold
+                for existing in unique_docs
+            ):
+                continue
             unique_docs.append(doc)
 
         return unique_docs

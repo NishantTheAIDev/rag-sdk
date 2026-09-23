@@ -107,6 +107,7 @@ class ExperimentRunner:
             store,
             chunk_store=chunk_store,
             document_store=document_store,
+            preprocessing_config=config.preprocessing,
         )
 
         # Build retrieval pipeline

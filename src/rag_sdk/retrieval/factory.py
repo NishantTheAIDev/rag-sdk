@@ -49,7 +49,7 @@ def build_retriever(
             return BM25Retriever(config)
         case HybridRetrievalConfig():
             dense = DenseRetriever(embedding_provider, store, config)
-            lexical = BM25Retriever(config.bm25)
+            lexical = BM25Retriever(config.bm25, filters=config.filters)
             return HybridRetriever(dense, lexical, config)
         case MMRRetrievalConfig():
             return MMRRetriever(config, embedding_provider, store)
@@ -65,8 +65,17 @@ def _maybe_wrap_multi_query(
     """Wrap retriever with MultiQueryRetriever if enabled."""
     if config.multi_query.enabled:
         generator = None
-        if config.multi_query.query_generator == "llm" and generation_config:
+        if config.multi_query.query_generator == "llm":
+            if generation_config is None:
+                raise ValueError(
+                    "retrieval.multi_query.query_generator='llm' requires a 'generation' "
+                    "section; use query_generator='template' with a template otherwise"
+                )
             generator = build_generator(generation_config)
+        elif not config.multi_query.template:
+            raise ValueError(
+                "retrieval.multi_query.query_generator='template' requires a template"
+            )
         return MultiQueryRetriever(retriever, config.multi_query, generator)
     return retriever
 
