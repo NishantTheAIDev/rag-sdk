@@ -16,6 +16,7 @@ class ParetoPoint:
     config: dict[str, Any]
     metrics: dict[str, float]
     dominated: bool = False
+    run_id: str | None = None
 
 
 class OptimizationResult(BaseModel):
@@ -24,6 +25,7 @@ class OptimizationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     recommended_config: dict[str, Any]
+    recommended_run_id: str | None = None
     reasoning: str
     pareto_frontier: list[ParetoPoint]
     baseline_comparison: dict[str, float] | None = None

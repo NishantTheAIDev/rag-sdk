@@ -144,15 +144,26 @@ LLM-as-judge evaluators (independent judge config):
 
 - `build_evaluators(config, judge_generator)` — build evaluator list from config.
 - `EvaluationPipeline(config, documents).evaluate(dataset_path)` — full pipeline.
-- `evaluate_rag(config, documents, dataset_path)` — convenience function.
+- `evaluate_rag(config, documents, dataset_path, *, k=None, relevance_level=None)` —
+  convenience function. Returns `retrieval_metrics`, `answer_metrics` (also
+  `metrics`), `latency_ms`, `dataset` (path, hash, queries), `models`,
+  `timestamp`, `config` and per-query `results`.
+- `evaluation_report(result)` / `write_evaluation_report(result, path)` —
+  JSON-serializable, reproducible record of an `evaluate_rag` run.
+- `relevance.judge_retrieval(retrieved, sample, chunks_by_document, level)` —
+  document- or chunk-level ground truth pairing shared with the experiment runner.
 
 ## `rag_sdk.optimization`
 
 - `Optimizer` — abstract base; `optimize(results, config) -> OptimizationResult`.
 - `ParetoOptimizer` — multi-objective Pareto optimization with constraints.
-- `OptimizationResult` — recommended_config, reasoning, pareto_frontier, baseline_comparison, all_configs.
-- `ParetoPoint` — config, metrics, dominated flag.
+- `OptimizationResult` — recommended_config (full pipeline config), recommended_run_id,
+  reasoning, pareto_frontier, baseline_comparison, all_configs.
+- `ParetoPoint` — config, metrics, dominated flag, run_id.
 - `build_optimizer(type) -> Optimizer` — factory.
+- `load_experiment_records(path)` — read an experiment's `results.json` (file or
+  output directory) into optimizer input: `{"run_id", "config", "metrics"}`, with
+  mean search latency as `metrics["latency_ms"]`.
 
 ## `rag_sdk.telemetry`
 
@@ -171,18 +182,25 @@ LLM-as-judge evaluators (independent judge config):
 ## `rag_sdk.experiments`
 
 - `ExperimentConfig` — dataset, dot-path parameter sweeps, rank cutoff,
-  primary metric, output directory.
+  primary metric, `relevance_level` (`document` | `chunk`), output directory.
 - `expand_grid(base, parameters)` / `apply_override(config, path, value)` —
-  build the parameter sweep cartesian product.
+  build the parameter sweep cartesian product. Strategy overrides keep the
+  section's shared fields (`top_k`, `candidate_k`, `chunk_size`, `overlap`, …);
+  each combination is validated once after all overrides.
 - `expand_grid_with_detail(base, parameters) -> list[GridVariant]` — as above
   but each variant reports the parameters skipped for its strategy.
 - `ExperimentParameterWarning` — emitted when a sweep parameter does not apply
   to a strategy (for example `retrieval.fusion.method` on a `dense` variant).
+- `ExperimentConfigWarning` — emitted when a run's metrics would be misleading
+  (`retrieval.top_k` < `experiments.k`, or a reranker whose `candidate_k` covers
+  the whole index).
 - `ExperimentRunner(documents, base_config, experiment).run() ->
-  ExperimentResult` — run every combination.
+  ExperimentResult` — run every combination, reusing embedding models,
+  rerankers and already-computed embeddings across combinations.
 - `run_experiment(documents, base_config)` — run the sweep declared in config.
 - `ExperimentRecord` / `ExperimentResult` — per-run and aggregate results;
-  each record carries `skipped_parameters`; `result.leaderboard()` sorts by
+  each record carries `skipped_parameters` and `warnings`; the result carries
+  `relevance_level`; `result.leaderboard()` sorts by
   the primary metric.
 - `load_queries(path)` — load a JSONL dataset
   (`{"query", "relevant_documents": [doc_id, ...]}`).
@@ -192,5 +210,5 @@ LLM-as-judge evaluators (independent judge config):
 ## `rag_sdk.cli`
 
 - `app` — the `rag` Typer application with `init`, `validate`, `evaluate`,
-  `benchmark`, `experiment`, `optimize`, `export-config` commands.
+  `evaluate-pipeline`, `benchmark`, `experiment`, `optimize`, `export-config` commands.
   The CLI stays thin; logic lives in the SDK modules.

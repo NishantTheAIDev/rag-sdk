@@ -237,10 +237,10 @@ Tracks completed phases and the tasks delivered in each. Phases follow
   - Integration points: embedding, retrieval, generation caches (config-gated)
 
 - CLI commands
-  - `rag evaluate CONFIG` — end-to-end evaluation (retrieval + generation + answer eval)
+  - `rag evaluate RESULTS_JSONL` — retrieval metrics from a results file
   - `rag benchmark DOCUMENTS DATASET` — run versioned baseline, save results
   - `rag experiment CONFIG` — parameter sweeps with reports
-  - `rag optimize CONFIG` — Pareto optimization on experiment results, print recommendation
+  - `rag optimize CONFIG` — Pareto optimization on `results.json`, writes `optimized-rag.yaml`
   - `rag export-config CONFIG` — export optimized config as YAML/JSON
 
 - Tests
@@ -328,3 +328,27 @@ Tracks completed phases and the tasks delivered in each. Phases follow
 - Verification
   - `ruff check .` clean
   - `pytest` — 200+ tests passing on Python 3.14
+
+## Fixes: experiment sweeps and optimization
+
+- `rag optimize` reads full run configs from `results.json` (previously it read
+  `leaderboard.csv`, which has no config column, and emitted `config: {}`), and
+  minimizes mean latency as `latency_ms`. SDK: `load_experiment_records`.
+- Strategy sweeps preserve shared section fields (`top_k`, `candidate_k`,
+  `chunk_size`, `overlap`, …); combinations are validated once after all
+  overrides so declaration order no longer matters; sweeping
+  `reranker.strategy` creates a missing reranker section.
+- `ExperimentConfigWarning` for `retrieval.top_k < experiments.k` and for
+  rerankers whose `candidate_k` covers the whole index; recorded per run.
+- `experiments.relevance_level` (default `document`) removes the bias towards
+  large chunks; `chunk` honours `relevant_chunks` and `relevance_grades`.
+- Embedding models, rerankers and embeddings are reused across combinations.
+- `OptimizationMetric` accepts every retrieval metric (`hit_at_k`,
+  `precision_at_k`, `map` added).
+- README/docs: corrected `rag evaluate` usage and optimization constraints.
+- `rag evaluate-pipeline CONFIG` — end-to-end evaluation of the configured
+  pipeline: retrieval metrics and answer metrics reported separately, latency,
+  and an `evaluation.json` run record (config, dataset hash, models, timestamp,
+  per-query results). `evaluate_rag` gained these fields; `evaluation.dataset`,
+  `evaluation.k` and `evaluation.relevance_level` config keys added. Relevance
+  judging is shared with the experiment runner (`evaluation.relevance`).

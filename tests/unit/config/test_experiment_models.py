@@ -10,6 +10,7 @@ from rag_sdk.config import (
     ExperimentConfig,
     FusionConfig,
     HybridRetrievalConfig,
+    OptimizationConfig,
     RagConfig,
 )
 
@@ -90,3 +91,16 @@ def test_dump_config_excludes_none() -> None:
     yaml_text = dump_config(config)
     assert "experiments" not in yaml_text
     assert "documents" not in yaml_text
+
+@pytest.mark.parametrize(
+    "metric", ["hit_at_k", "precision_at_k", "recall_at_k", "mrr", "ndcg_at_k", "map"]
+)
+def test_optimization_accepts_every_retrieval_metric(metric: str) -> None:
+    config = OptimizationConfig(primary_metric=metric, secondary_metric=metric)
+    assert config.primary_metric == metric
+
+
+def test_experiment_relevance_level_defaults_to_document() -> None:
+    assert ExperimentConfig(dataset="q.jsonl").relevance_level == "document"
+    with pytest.raises(ValidationError):
+        ExperimentConfig(dataset="q.jsonl", relevance_level="paragraph")

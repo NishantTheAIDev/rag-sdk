@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rag_sdk.optimization.base import OptimizationResult, Optimizer, ParetoPoint
 from rag_sdk.optimization.factory import build_optimizer
+from rag_sdk.optimization.io import load_experiment_records
 from rag_sdk.optimization.pareto import ParetoOptimizer
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "ParetoPoint",
     "ParetoOptimizer",
     "build_optimizer",
+    "load_experiment_records",
 ]

@@ -6,6 +6,8 @@ import itertools
 import warnings
 from dataclasses import dataclass, field
 
+from pydantic import BaseModel, ValidationError
+
 from rag_sdk.config import (
     BM25RetrievalConfig,
     CohereRerankerConfig,
@@ -23,6 +25,11 @@ from rag_sdk.config import (
     StructureAwareChunkerConfig,
 )
 from rag_sdk.config.loader import ConfigError
+from rag_sdk.config.models import (
+    ChunkerConfigBase,
+    RerankerConfigBase,
+    RetrievalConfigBase,
+)
 
 _VARIANT_DEFAULTS = {
     "dense": DenseRetrievalConfig,
@@ -38,6 +45,15 @@ _VARIANT_DEFAULTS = {
     "none": NoRerankerConfig,
     "cross_encoder": CrossEncoderRerankerConfig,
     "cohere": CohereRerankerConfig,
+}
+
+# Fields shared by every variant of a section. They survive a strategy switch
+# so that, e.g., sweeping ``retrieval.strategy`` keeps the configured
+# ``candidate_k`` instead of resetting it to the new strategy's default.
+_SHARED_FIELDS: dict[str, type[BaseModel]] = {
+    "chunking": ChunkerConfigBase,
+    "retrieval": RetrievalConfigBase,
+    "reranker": RerankerConfigBase,
 }
 
 
@@ -63,38 +79,77 @@ def apply_override(
 ) -> RagConfig:
     """Return ``config`` with the value at ``dot_path`` replaced by ``value``.
 
-    When the path targets a strategy discriminator (``chunking.strategy`` or
-    ``retrieval.strategy``), the selected strategy's default configuration is
-    applied so that later overrides can tune it. With ``skip_missing=True``,
-    overrides whose path does not exist in the current configuration are
-    ignored instead of raising (used during sweeps where a parameter only
-    applies to some strategies); the skipped paths are appended to ``skipped``
-    when provided.
+    When the path targets a strategy discriminator (``chunking.strategy``,
+    ``retrieval.strategy`` or ``reranker.strategy``), the selected strategy's
+    default configuration is applied so that later overrides can tune it.
+    Fields shared by every variant of that section (such as ``top_k``,
+    ``candidate_k``, ``chunk_size`` and ``overlap``) keep their current values.
+    Selecting a reranker strategy when no reranker is configured creates one.
+
+    With ``skip_missing=True``, overrides whose path does not exist in the
+    current configuration are ignored instead of raising (used during sweeps
+    where a parameter only applies to some strategies); the skipped paths are
+    appended to ``skipped`` when provided.
     """
+    data = config.model_dump(mode="json")
+    if not _apply_to_data(data, dot_path, value, skip_missing=skip_missing, skipped=skipped):
+        return config
+    return RagConfig.model_validate(data)
+
+
+def _apply_to_data(
+    data: dict[str, object],
+    dot_path: str,
+    value: object,
+    *,
+    skip_missing: bool,
+    skipped: list[str] | None,
+) -> bool:
+    """Apply one override to a dumped config in place; return whether it applied."""
     if not dot_path:
         raise ConfigError("Experiment parameter path must not be empty")
-    data = config.model_dump(mode="json")
     parts = dot_path.split(".")
-    current = data
-    for part in parts[:-1]:
-        if not isinstance(current, dict) or part not in current:
-            if skip_missing:
-                _record_skipped(skipped, dot_path)
-                return config
-            raise ConfigError(f"Unknown experiment parameter: {dot_path!r}")
-        current = current[part]
     last = parts[-1]
-    if not isinstance(current, dict) or last not in current:
-        if skip_missing:
-            _record_skipped(skipped, dot_path)
-            return config
-        raise ConfigError(f"Unknown experiment parameter: {dot_path!r}")
+    current: object = data
+    for depth, part in enumerate(parts[:-1]):
+        is_strategy_parent = depth == len(parts) - 2 and last == "strategy"
+        if (
+            is_strategy_parent
+            and isinstance(current, dict)
+            and part in _SHARED_FIELDS
+            and current.get(part) is None
+        ):
+            # e.g. sweeping reranker.strategy with no reranker configured yet.
+            current[part] = {}
+        if not isinstance(current, dict) or part not in current:
+            return _missing(dot_path, skip_missing, skipped)
+        current = current[part]
+    # A freshly created (empty) section accepts its first ``strategy``.
+    if not isinstance(current, dict) or (
+        last not in current and not (last == "strategy" and not current)
+    ):
+        return _missing(dot_path, skip_missing, skipped)
     if last == "strategy":
+        section = ".".join(parts[:-1])
+        shared = _SHARED_FIELDS.get(section)
+        preserved = (
+            {key: current[key] for key in shared.model_fields if key in current}
+            if shared is not None
+            else {}
+        )
         current.clear()
         current.update(_variant_default(value))
+        current.update(preserved)
     else:
         current[last] = value
-    return RagConfig.model_validate(data)
+    return True
+
+
+def _missing(dot_path: str, skip_missing: bool, skipped: list[str] | None) -> bool:
+    if not skip_missing:
+        raise ConfigError(f"Unknown experiment parameter: {dot_path!r}")
+    _record_skipped(skipped, dot_path)
+    return False
 
 
 def expand_grid(
@@ -102,8 +157,11 @@ def expand_grid(
 ) -> list[RagConfig]:
     """Build the cartesian product of all parameter combinations.
 
-    Parameters are applied in declaration order, with strategy selections
-    always applied first so deeper overrides can tune the selected variant.
+    Strategy selections are applied first so deeper overrides can tune the
+    selected variant; each combination is validated once after every override
+    is applied, so declaration order does not matter (for example sweeping
+    ``chunking.chunk_size`` below the default ``overlap`` together with a
+    smaller ``chunking.overlap``).
     Overrides that do not apply to a strategy (for example sweeping
     ``retrieval.fusion.method`` while another combination selects the dense
     strategy) are skipped for that combination with a warning. An empty sweep
@@ -128,12 +186,19 @@ def expand_grid_with_detail(
     combos = itertools.product(*value_lists)
     variants: list[GridVariant] = []
     for combo in combos:
-        variant = base_config
+        data = base_config.model_dump(mode="json")
         skipped: list[str] = []
         for key, value in zip(ordered_keys, combo, strict=True):
-            variant = apply_override(
-                variant, key, value, skip_missing=True, skipped=skipped
+            _apply_to_data(data, key, value, skip_missing=True, skipped=skipped)
+        try:
+            variant = RagConfig.model_validate(data)
+        except ValidationError as exc:
+            combination = ", ".join(
+                f"{key}={value!r}" for key, value in zip(ordered_keys, combo, strict=True)
             )
+            raise ConfigError(
+                f"Invalid experiment combination ({combination}): {exc}"
+            ) from exc
         for path in skipped:
             warnings.warn(
                 f"Experiment parameter {path!r} does not apply to strategy "

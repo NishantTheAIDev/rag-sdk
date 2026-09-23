@@ -17,7 +17,12 @@ from rag_sdk.evaluation.answer import (
     build_evaluators,
 )
 from rag_sdk.evaluation.io import load_retrieval_results
-from rag_sdk.evaluation.pipeline import EvaluationPipeline, evaluate_rag
+from rag_sdk.evaluation.pipeline import (
+    EvaluationPipeline,
+    evaluate_rag,
+    evaluation_report,
+    write_evaluation_report,
+)
 from rag_sdk.evaluation.retrieval_metrics import (
     average_precision,
     evaluate_retrieval,
@@ -59,4 +64,6 @@ __all__ = [
     # Pipeline
     "EvaluationPipeline",
     "evaluate_rag",
+    "evaluation_report",
+    "write_evaluation_report",
 ]

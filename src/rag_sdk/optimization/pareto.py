@@ -19,12 +19,15 @@ class ParetoOptimizer(Optimizer):
         if not experiment_results:
             raise ValueError("No experiment results to optimize")
 
-        # Extract metrics from results
+        # Extract metrics from results. ``run_id`` may sit on the record or,
+        # for older callers, inside ``config``.
         configs_with_metrics = []
+        run_ids: dict[int, str | None] = {}
         for result in experiment_results:
             config = result.get("config", {})
             metrics = result.get("metrics", {})
             if metrics:
+                run_ids[id(config)] = result.get("run_id") or config.get("run_id")
                 configs_with_metrics.append((config, metrics))
 
         if not configs_with_metrics:
@@ -76,7 +79,14 @@ class ParetoOptimizer(Optimizer):
 
         for config, metrics in valid_configs:
             if is_pareto_optimal(metrics, all_metrics, maximize_metrics, minimize_metrics):
-                pareto_points.append(ParetoPoint(config=config, metrics=metrics, dominated=False))
+                pareto_points.append(
+                    ParetoPoint(
+                        config=config,
+                        metrics=metrics,
+                        dominated=False,
+                        run_id=run_ids.get(id(config)),
+                    )
+                )
 
         # Score each Pareto point
         scored_points = []
@@ -102,13 +112,15 @@ class ParetoOptimizer(Optimizer):
         baseline_comparison = None
         baseline_run_id = optimization_config.get("baseline_run_id")
         if baseline_run_id:
-            baseline = next(
-                (c for c, m in configs_with_metrics if c.get("run_id") == baseline_run_id), None
+            baseline_metrics = next(
+                (
+                    m
+                    for c, m in configs_with_metrics
+                    if run_ids.get(id(c)) == baseline_run_id
+                ),
+                None,
             )
-            if baseline:
-                baseline_metrics = next(
-                    (m for c, m in configs_with_metrics if c.get("run_id") == baseline_run_id), {}
-                )
+            if baseline_metrics is not None:
                 baseline_comparison = {}
                 for key in set(best_point.metrics.keys()) | set(baseline_metrics.keys()):
                     if key in best_point.metrics and key in baseline_metrics:
@@ -116,6 +128,7 @@ class ParetoOptimizer(Optimizer):
 
         return OptimizationResult(
             recommended_config=best_point.config,
+            recommended_run_id=best_point.run_id,
             reasoning=reasoning,
             pareto_frontier=pareto_points,
             baseline_comparison=baseline_comparison,
@@ -157,27 +170,34 @@ class ParetoOptimizer(Optimizer):
         constraints: dict[str, float],
     ) -> str:
         """Generate human-readable reasoning for the recommendation."""
+        def fmt(value: float | None) -> str:
+            return "N/A" if value is None else f"{value:.4f}"
+
         lines = [
             f"Recommended configuration selected from {len(all_scored)} "
             f"Pareto-optimal candidates.",
-            f"Primary metric: {primary_metric} = "
-            f"{best_point.metrics.get(primary_metric, 'N/A'):.4f}",
         ]
+        if best_point.run_id:
+            lines.append(f"Recommended run: {best_point.run_id}")
+        lines.append(
+            f"Primary metric: {primary_metric} = {fmt(best_point.metrics.get(primary_metric))}"
+        )
 
         if secondary_metric:
-            val = best_point.metrics.get(secondary_metric, "N/A")
-            lines.append(f"Secondary metric: {secondary_metric} = {val:.4f}")
+            val = best_point.metrics.get(secondary_metric)
+            lines.append(f"Secondary metric: {secondary_metric} = {fmt(val)}")
 
         if constraints:
             lines.append("Constraints satisfied:")
             for key, value in constraints.items():
-                actual = best_point.metrics.get(key, "N/A")
-                lines.append(f"  {key}: {actual} (limit: {value})")
+                actual = best_point.metrics.get(key)
+                lines.append(f"  {key}: {fmt(actual)} (limit: {value})")
 
         lines.append(f"\nPareto frontier size: {len(all_scored)}")
         lines.append("Top 3 candidates:")
         for i, (score, point) in enumerate(all_scored[:3], 1):
-            val = point.metrics.get(primary_metric, "N/A")
-            lines.append(f"  {i}. Score: {score:.4f} | {primary_metric}: {val:.4f}")
+            val = point.metrics.get(primary_metric)
+            label = f"{point.run_id} | " if point.run_id else ""
+            lines.append(f"  {i}. {label}Score: {score:.4f} | {primary_metric}: {fmt(val)}")
 
         return "\n".join(lines)

@@ -50,10 +50,11 @@ uv pip install -e ".[dev]"
 rag init              # write rag.yaml
 rag validate rag.yaml
 rag benchmark ./docs ./queries.jsonl    # run baseline
-rag evaluate rag.yaml                   # end-to-end evaluation
+rag evaluate results.jsonl --k 10       # score retrieval results (JSONL)
+rag evaluate-pipeline rag.yaml -d queries.jsonl   # end-to-end: retrieval + answers
 rag experiment rag.yaml                 # parameter sweep
-rag optimize rag.yaml                   # Pareto optimization
-rag export-config rag.yaml              # export optimized config
+rag optimize rag.yaml                   # Pareto optimization -> runs/optimized-rag.yaml
+rag export-config runs/optimized-rag.yaml -f json   # convert a config to JSON
 ```
 
 ```python
@@ -89,10 +90,15 @@ experiments:
 ```
 
 ```bash
-rag experiment rag.yaml
+rag experiment rag.yaml    # writes results.csv/json, leaderboard.csv, report.html
+rag optimize rag.yaml      # writes the best full config to runs/optimized-rag.yaml
 ```
 
-See `configs/experiment.yaml` for a complete example.
+Strategy sweeps keep shared settings such as `top_k`, `candidate_k`,
+`chunk_size` and `overlap`, and metrics are scored at document level by
+default (`experiments.relevance_level`), so chunk sizes compare fairly. See
+`configs/experiment.yaml` for a complete example and `docs/index.md` for the
+full sweep semantics.
 
 ## Configuration Examples
 
@@ -437,16 +443,46 @@ optimization:
   primary_metric: faithfulness
   secondary_metric: latency_ms
   constraints:
-    max_latency_ms: 500
+    latency_ms: 500        # keys are metric names; latency is an upper bound
   weights:
     faithfulness: 1.0
     latency_ms: -0.5
 ```
 
-Run end-to-end evaluation:
+Run end-to-end evaluation (index `documents.path`, retrieve, generate, score):
 
 ```bash
-rag evaluate rag.yaml
+rag evaluate-pipeline rag.yaml --dataset queries.jsonl -o runs/eval
+```
+
+The dataset defaults to `evaluation.dataset`, then `experiments.dataset`, and
+the rank cutoff to `evaluation.k`, then `retrieval.top_k`. Retrieval metrics
+(Hit/Precision/Recall@k, MRR, nDCG, MAP, at `evaluation.relevance_level`) and
+answer metrics are reported separately, along with retrieval and total latency.
+With `-o`, `evaluation.json` records the config, dataset path and hash, metrics,
+latency, timestamp, model information and a per-query breakdown. Generation and
+LLM judges may call paid APIs depending on their providers. (`rag evaluate`
+only scores an existing retrieval-results JSONL file.)
+
+```yaml
+evaluation:
+  dataset: ./queries.jsonl   # optional
+  k: 5                       # optional, defaults to retrieval.top_k
+  relevance_level: document  # document | chunk
+```
+
+The same run from Python:
+
+```python
+from rag_sdk.config import load_config
+from rag_sdk.evaluation import evaluate_rag, write_evaluation_report
+from rag_sdk.ingestion import load_documents
+
+config = load_config("rag.yaml")
+documents = load_documents(config.documents.path, config.documents.loader)
+result = evaluate_rag(config, documents, "queries.jsonl")
+print(result["retrieval_metrics"], result["answer_metrics"])
+write_evaluation_report(result, "runs/eval/evaluation.json")
 ```
 
 Run Pareto optimization on experiment results:
@@ -455,10 +491,19 @@ Run Pareto optimization on experiment results:
 rag optimize rag.yaml
 ```
 
-Export the optimized configuration:
+`rag optimize` reads `results.json` from `experiments.output_dir` (or `-o DIR`),
+keeps the Pareto frontier (quality metrics maximized, mean `latency_ms`
+minimized), applies `constraints` and `weights`, and writes the full
+recommended pipeline to `<output_dir>/optimized-rag.yaml`. Any retrieval
+metric (`hit_at_k`, `precision_at_k`, `recall_at_k`, `mrr`, `ndcg_at_k`, `map`)
+or `latency_ms` can be the primary or secondary metric. Answer metrics such as
+`faithfulness` are only available from end-to-end evaluation, not from
+`rag experiment` results.
+
+Convert the recommended configuration to JSON:
 
 ```bash
-rag export-config rag.yaml -o optimized.yaml
+rag export-config runs/optimized-rag.yaml -f json -o optimized.json
 ```
 
 ### 9. Baseline Benchmark
