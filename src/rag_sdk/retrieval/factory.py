@@ -16,7 +16,7 @@ from rag_sdk.core import Chunk, Registry
 from rag_sdk.embeddings import EmbeddingProvider
 from rag_sdk.generation import build_generator
 from rag_sdk.indexing import ChunkStore, DocumentStore, VectorStore
-from rag_sdk.reranking import build_reranker
+from rag_sdk.reranking import RerankerProvider, build_reranker
 from rag_sdk.retrieval.base import Retriever
 from rag_sdk.retrieval.bm25 import BM25Retriever
 from rag_sdk.retrieval.dense import DenseRetriever
@@ -112,8 +112,13 @@ def build_retrieval_pipeline(
     chunk_store: ChunkStore | None,
     document_store: DocumentStore | None,
     chunks: Sequence[Chunk] | None = None,
+    reranker: RerankerProvider | None = None,
 ) -> RetrievalPipeline:
-    """Build the full retrieval pipeline with reranking and enrichment."""
+    """Build the full retrieval pipeline with reranking and enrichment.
+
+    ``reranker`` lets callers reuse an already-loaded reranker (for example
+    across experiment runs); when omitted it is built from ``config.reranker``.
+    """
     # Build base retriever
     retriever = build_retriever(config.retrieval, embedding_provider, vector_store)
 
@@ -130,7 +135,8 @@ def build_retrieval_pipeline(
         retriever.add_chunks(chunks)
 
     # Build reranker
-    reranker = build_reranker(config.reranker) if config.reranker else None
+    if reranker is None and config.reranker is not None:
+        reranker = build_reranker(config.reranker)
 
     # Build pipeline
     pipeline = RetrievalPipeline(

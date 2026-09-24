@@ -4,8 +4,9 @@
 # run, evaluated against `dataset`, and reported to `output_dir`.
 #
 # Parameters use dot-paths into the pipeline config. Sweeping a strategy
-# (`retrieval.strategy`, `chunking.strategy`) applies that strategy's defaults,
-# so later overrides can tune it.
+# (`retrieval.strategy`, `chunking.strategy`, `reranker.strategy`) applies that
+# strategy's defaults while keeping shared settings such as top_k, candidate_k,
+# chunk_size and overlap, so later overrides can tune it.
 
 project:
   name: rag-experiment
@@ -52,8 +53,9 @@ reranker:
 
 experiments:
   dataset: ./examples/queries.jsonl
-  k: 10
+  k: 5                        # keep <= retrieval.top_k, or @k metrics are capped
   primary_metric: mrr
+  relevance_level: document   # document | chunk
   output_dir: ./runs
   parameters:
     # Chunking strategies

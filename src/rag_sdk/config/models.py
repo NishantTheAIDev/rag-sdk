@@ -19,9 +19,12 @@ AnswerMetric = Literal[
     "citation_accuracy",
 ]
 OptimizationMetric = Literal[
+    "hit_at_k",
+    "precision_at_k",
     "recall_at_k",
     "mrr",
     "ndcg_at_k",
+    "map",
     "faithfulness",
     "answer_relevance",
     "latency_ms",
@@ -327,6 +330,12 @@ class ExperimentConfig(BaseModel):
     primary_metric: Literal[
         "hit_at_k", "precision_at_k", "recall_at_k", "mrr", "ndcg_at_k", "map"
     ] = "mrr"
+    # "document": retrieved chunks are collapsed to their documents and scored
+    # against ``relevant_documents``, so metrics are comparable across chunk
+    # sizes. "chunk": scored per chunk against ``relevant_chunks`` /
+    # ``relevance_grades`` when a query provides them, otherwise every chunk
+    # of a relevant document counts as relevant (which favours big chunks).
+    relevance_level: Literal["document", "chunk"] = "document"
     output_dir: str = "runs"
 
 
@@ -416,6 +425,12 @@ class EvaluationConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # JSONL query set for `rag evaluate-pipeline` (falls back to experiments.dataset).
+    dataset: str | None = None
+    # Rank cutoff for retrieval metrics; defaults to retrieval.top_k.
+    k: int | None = Field(default=None, ge=1)
+    # Same semantics as ``ExperimentConfig.relevance_level``.
+    relevance_level: Literal["document", "chunk"] = "document"
     answer: AnswerEvaluationConfig = Field(default_factory=AnswerEvaluationConfig)
 
 

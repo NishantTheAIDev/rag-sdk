@@ -126,3 +126,65 @@ def test_expand_grid_with_detail_no_sweep() -> None:
     assert len(variants) == 1
     assert variants[0].config == BASE
     assert variants[0].skipped_parameters == []
+
+def test_strategy_switch_preserves_shared_fields() -> None:
+    base = RagConfig.model_validate(
+        {
+            "chunking": {"strategy": "recursive", "chunk_size": 128, "overlap": 16},
+            "retrieval": {"strategy": "dense", "top_k": 7, "candidate_k": 20},
+        }
+    )
+
+    retrieval = apply_override(base, "retrieval.strategy", "hybrid").retrieval
+    chunking = apply_override(base, "chunking.strategy", "fixed").chunking
+
+    assert isinstance(retrieval, HybridRetrievalConfig)
+    assert (retrieval.top_k, retrieval.candidate_k) == (7, 20)
+    assert chunking.strategy == "fixed"
+    assert (chunking.chunk_size, chunking.overlap) == (128, 16)
+
+
+def test_strategy_switch_drops_variant_specific_fields() -> None:
+    base = RagConfig.model_validate(
+        {
+            "chunking": {"strategy": "recursive", "chunk_size": 128, "overlap": 16},
+            "reranker": {"strategy": "cross_encoder", "model": "custom/model", "top_k": 3},
+        }
+    )
+
+    reranker = apply_override(base, "reranker.strategy", "cohere").reranker
+
+    assert reranker is not None
+    assert reranker.strategy == "cohere"
+    assert reranker.top_k == 3
+    assert reranker.model != "custom/model"
+
+
+def test_reranker_strategy_sweep_creates_missing_reranker() -> None:
+    variants = expand_grid(BASE, {"reranker.strategy": ["none", "cross_encoder"]})
+
+    assert [v.reranker.strategy for v in variants if v.reranker] == [
+        "none",
+        "cross_encoder",
+    ]
+
+
+def test_expand_grid_validates_after_all_overrides() -> None:
+    # chunk_size 32 is below the base overlap (64); declaring the smaller
+    # overlap afterwards must still produce a valid combination.
+    variants = expand_grid(
+        BASE,
+        {"chunking.chunk_size": [32], "chunking.overlap": [8]},
+    )
+
+    assert (variants[0].chunking.chunk_size, variants[0].chunking.overlap) == (32, 8)
+
+
+def test_expand_grid_invalid_combination_names_parameters() -> None:
+    with pytest.raises(ConfigError, match="chunking.chunk_size=32"):
+        expand_grid(BASE, {"chunking.chunk_size": [32]})
+
+
+def test_apply_override_unknown_strategy_path_raises() -> None:
+    with pytest.raises(ConfigError, match="Unknown experiment parameter"):
+        apply_override(BASE, "embedding.strategy", "dense")

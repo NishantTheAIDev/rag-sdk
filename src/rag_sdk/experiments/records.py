@@ -41,6 +41,7 @@ class ExperimentRecord(BaseModel):
     metrics: dict[str, float] = Field(default_factory=dict)
     total_chunks: int
     skipped_parameters: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class ExperimentResult(BaseModel):
@@ -52,6 +53,7 @@ class ExperimentResult(BaseModel):
     dataset_hash: str
     primary_metric: str
     k: int
+    relevance_level: str = "document"
     records: list[ExperimentRecord]
 
     def leaderboard(self) -> list[ExperimentRecord]:

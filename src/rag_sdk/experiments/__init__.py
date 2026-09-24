@@ -24,11 +24,16 @@ from rag_sdk.experiments.reports import (
     write_leaderboard,
     write_reports,
 )
-from rag_sdk.experiments.runner import ExperimentRunner, run_experiment
+from rag_sdk.experiments.runner import (
+    ExperimentConfigWarning,
+    ExperimentRunner,
+    run_experiment,
+)
 
 __all__ = [
     "DatasetError",
     "EmbeddingInfo",
+    "ExperimentConfigWarning",
     "ExperimentParameterWarning",
     "ExperimentRecord",
     "ExperimentResult",
