@@ -135,10 +135,13 @@ def test_write_evaluation_report_is_reproducible_record(tmp_path: Path) -> None:
                 "latency_ms", "timestamp", "models"):
         assert key in report
     RagConfig.model_validate(report["config"])
-    first = report["queries"][0]
+    first, second = report["queries"]
     assert first["answer"] == "Mock response"
     assert first["retrieved"][0]["document_id"] == "cats"
-    assert "correctness" in first["answer_scores"]
+    assert first["answer_scores"]["correctness"] == 1.0
+    # The second query has no reference answer: unmeasured, not scored 0.
+    assert second["answer_scores"]["correctness"] is None
+    assert report["answer_metrics"]["correctness"] == 1.0
 
 
 def test_evaluate_rag_missing_dataset(tmp_path: Path) -> None:

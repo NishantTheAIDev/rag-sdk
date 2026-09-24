@@ -13,7 +13,12 @@ from typing import Any, Literal
 from rag_sdk.config import RagConfig
 from rag_sdk.core import Document
 from rag_sdk.dataset.loader import load_queries
-from rag_sdk.evaluation.answer import EvaluationSample, RAGResult, build_evaluators
+from rag_sdk.evaluation.answer import (
+    EvaluationSample,
+    RAGResult,
+    build_evaluators,
+    is_applicable,
+)
 from rag_sdk.evaluation.relevance import judge_retrieval
 from rag_sdk.evaluation.retrieval_metrics import evaluate_retrieval
 from rag_sdk.generation import build_generator
@@ -249,6 +254,8 @@ class EvaluationPipeline:
 
         for r in results:
             for eval_result in r["eval_results"]:
+                if not is_applicable(eval_result):
+                    continue
                 metric_sums[eval_result.metric_name] += eval_result.score
                 metric_counts[eval_result.metric_name] += 1
 
@@ -292,8 +299,10 @@ def evaluation_report(result: dict[str, Any]) -> dict[str, Any]:
             ],
             "answer": rag_result.generation.text if rag_result.generation else None,
             "reference_answer": sample.reference_answer,
+            # ``None`` marks a metric that could not be measured for this query.
             "answer_scores": {
-                e.metric_name: e.score for e in item["eval_results"]
+                e.metric_name: e.score if is_applicable(e) else None
+                for e in item["eval_results"]
             },
             "latency_ms": item.get("latency_ms"),
         })

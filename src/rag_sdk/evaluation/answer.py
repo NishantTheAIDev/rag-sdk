@@ -109,60 +109,106 @@ class AnswerRelevanceEvaluator(BaseEvaluator):
         return self._make_result(score, f"Query token overlap: {len(overlap)}/{len(query_tokens)}")
 
 
+def not_applicable(metric_name: str, reason: str) -> EvaluationResult:
+    """A result for a sample the metric cannot score (e.g. no relevance labels).
+
+    Aggregation skips these instead of counting them as 0 or 1.
+    """
+    return EvaluationResult(
+        metric_name=metric_name,
+        score=0.0,
+        reason=reason,
+        evaluator_metadata={"applicable": False},
+    )
+
+
+def is_applicable(result: EvaluationResult) -> bool:
+    """Whether ``result`` should count towards aggregate metrics."""
+    return result.evaluator_metadata.get("applicable", True) is not False
+
+
+def _retrieved_chunks(result: RAGResult) -> list[Any]:
+    return [c.chunk for c in result.retrieved_chunks if hasattr(c, "chunk")]
+
+
 class ContextPrecisionEvaluator(BaseEvaluator):
-    """Context precision: fraction of retrieved chunks that are relevant."""
+    """Context precision: fraction of retrieved chunks that are relevant.
+
+    Uses ``relevant_chunks`` when the sample has them; otherwise a retrieved
+    chunk is relevant when its document is in ``relevant_documents``. Samples
+    with neither are not applicable and are left out of the aggregate.
+    """
 
     def __init__(self) -> None:
         super().__init__("context_precision")
 
     def evaluate(self, sample: EvaluationSample, result: RAGResult) -> EvaluationResult:
+        if not sample.relevant_chunks and not sample.relevant_documents:
+            return not_applicable(self.metric_name, "No relevance labels")
         if not result.retrieved_chunks:
             return self._make_result(0.0, "No retrieved chunks")
 
-        relevant = set(sample.relevant_chunks)
-        retrieved = [c.chunk.id for c in result.retrieved_chunks if hasattr(c, "chunk")]
-
-        if not retrieved:
+        chunks = _retrieved_chunks(result)
+        if not chunks:
             return self._make_result(0.0, "No retrieved chunk IDs")
 
-        relevant_retrieved = sum(1 for r in retrieved if r in relevant)
-        score = relevant_retrieved / len(retrieved)
-        return self._make_result(score, f"Relevant in top-K: {relevant_retrieved}/{len(retrieved)}")
+        if sample.relevant_chunks:
+            level = "chunk"
+            relevant = set(sample.relevant_chunks)
+            relevant_retrieved = sum(1 for c in chunks if c.id in relevant)
+        else:
+            level = "document"
+            relevant = set(sample.relevant_documents)
+            relevant_retrieved = sum(1 for c in chunks if c.document_id in relevant)
+        score = relevant_retrieved / len(chunks)
+        return self._make_result(
+            score, f"Relevant in top-K ({level} labels): {relevant_retrieved}/{len(chunks)}"
+        )
 
 
 class ContextRecallEvaluator(BaseEvaluator):
-    """Context recall: fraction of relevant chunks that were retrieved."""
+    """Context recall: fraction of relevant items that were retrieved.
+
+    With ``relevant_chunks``, the fraction of those chunks retrieved; otherwise
+    the fraction of ``relevant_documents`` with at least one retrieved chunk.
+    Samples with neither are not applicable and are left out of the aggregate.
+    """
 
     def __init__(self) -> None:
         super().__init__("context_recall")
 
     def evaluate(self, sample: EvaluationSample, result: RAGResult) -> EvaluationResult:
-        if not sample.relevant_chunks:
-            return self._make_result(1.0, "No relevant chunks to recall")
-
-        relevant = set(sample.relevant_chunks)
-        retrieved = set()
-        for c in result.retrieved_chunks:
-            if hasattr(c, "chunk"):
-                retrieved.add(c.chunk.id)
-
-        if not relevant:
-            return self._make_result(1.0, "No relevant chunks")
-
-        found = sum(1 for r in relevant if r in retrieved)
-        score = found / len(relevant)
-        return self._make_result(score, f"Relevant chunks found: {found}/{len(relevant)}")
+        chunks = _retrieved_chunks(result)
+        if sample.relevant_chunks:
+            relevant = set(sample.relevant_chunks)
+            found = len(relevant & {c.id for c in chunks})
+            return self._make_result(
+                found / len(relevant), f"Relevant chunks found: {found}/{len(relevant)}"
+            )
+        if sample.relevant_documents:
+            relevant = set(sample.relevant_documents)
+            found = len(relevant & {c.document_id for c in chunks})
+            return self._make_result(
+                found / len(relevant), f"Relevant documents found: {found}/{len(relevant)}"
+            )
+        return not_applicable(self.metric_name, "No relevance labels")
 
 
 class CorrectnessEvaluator(BaseEvaluator):
-    """Correctness evaluator using fuzzy matching."""
+    """Correctness evaluator using fuzzy matching.
+
+    Samples without a ``reference_answer``, or runs without generation, are
+    not applicable and are left out of the aggregate.
+    """
 
     def __init__(self) -> None:
         super().__init__("correctness")
 
     def evaluate(self, sample: EvaluationSample, result: RAGResult) -> EvaluationResult:
-        if not result.generation or not sample.reference_answer:
-            return self._make_result(0.0, "No generation or reference answer")
+        if not sample.reference_answer:
+            return not_applicable(self.metric_name, "No reference answer")
+        if result.generation is None:
+            return not_applicable(self.metric_name, "No generation")
 
         gen = result.generation.text.strip().lower()
         ref = sample.reference_answer.strip().lower()
@@ -186,22 +232,28 @@ class CorrectnessEvaluator(BaseEvaluator):
 
 
 class CitationAccuracyEvaluator(BaseEvaluator):
-    """Citation accuracy: do citations point to relevant chunks?"""
+    """Citation accuracy: do citations point to relevant chunks (or documents)?"""
 
     def __init__(self) -> None:
         super().__init__("citation_accuracy")
 
     def evaluate(self, sample: EvaluationSample, result: RAGResult) -> EvaluationResult:
+        if not sample.relevant_chunks and not sample.relevant_documents:
+            return not_applicable(self.metric_name, "No relevance labels")
         if not result.generation or not result.generation.cited_answer:
             return self._make_result(0.0, "No citations in generation")
 
-        relevant = set(sample.relevant_chunks)
         citations = result.generation.cited_answer.citations
-
         if not citations:
             return self._make_result(0.0, "No citations")
 
-        correct = sum(1 for c in citations if c.chunk_id in relevant)
+        # Chunk labels when present, otherwise the cited chunk's document.
+        if sample.relevant_chunks:
+            relevant = set(sample.relevant_chunks)
+            correct = sum(1 for c in citations if c.chunk_id in relevant)
+        else:
+            relevant = set(sample.relevant_documents)
+            correct = sum(1 for c in citations if c.document_id in relevant)
         score = correct / len(citations)
         return self._make_result(score, f"Correct citations: {correct}/{len(citations)}")
 
