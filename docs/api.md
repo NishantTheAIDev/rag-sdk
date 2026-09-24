@@ -134,10 +134,17 @@ Anything exposed from the top-level package and its submodules is public API.
 Reference-based evaluators:
 - `FaithfulnessEvaluator` — token overlap answer vs reference.
 - `AnswerRelevanceEvaluator` — query token overlap in answer.
-- `ContextPrecisionEvaluator` — relevant chunks in top-K.
-- `ContextRecallEvaluator` — fraction of relevant chunks retrieved.
-- `CorrectnessEvaluator` — fuzzy match vs reference answer.
-- `CitationAccuracyEvaluator` — citations point to relevant chunks.
+- `ContextPrecisionEvaluator` — fraction of retrieved chunks that are relevant.
+- `ContextRecallEvaluator` — fraction of relevant chunks (or documents) retrieved.
+- `CorrectnessEvaluator` — fuzzy match vs reference answer (not applicable
+  without a `reference_answer` or without generation).
+- `CitationAccuracyEvaluator` — citations point to relevant chunks (or documents).
+
+The context and citation evaluators use a query's `relevant_chunks` when
+present and fall back to `relevant_documents` otherwise. A query with neither
+yields a `not_applicable(...)` result (`evaluator_metadata["applicable"] is
+False`); aggregation skips those, and a metric no query can score is omitted.
+`is_applicable(result)` reports whether a result counts.
 
 LLM-as-judge evaluators (independent judge config):
 - `LLMFaithfulnessEvaluator`, `LLMAnswerRelevanceEvaluator`, `LLMCorrectnessEvaluator`.

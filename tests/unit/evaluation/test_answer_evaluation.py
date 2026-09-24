@@ -12,15 +12,16 @@ from rag_sdk.evaluation.answer import (
     EvaluationSample,
     FaithfulnessEvaluator,
     RAGResult,
+    is_applicable,
 )
 from rag_sdk.generation import Citation, CitedAnswer, GenerationResponse
 from rag_sdk.retrieval.base import RetrievalResult
 
 
-def _make_chunk(text: str, chunk_id: str = "c1") -> RetrievalResult:
+def _make_chunk(text: str, chunk_id: str = "c1", document_id: str = "d1") -> RetrievalResult:
     chunk = Chunk(
         id=chunk_id,
-        document_id="d1",
+        document_id=document_id,
         text=text,
         index=0,
         start_char=0,
@@ -193,3 +194,101 @@ def test_citation_accuracy_evaluator_wrong():
 
     assert eval_result.metric_name == "citation_accuracy"
     assert eval_result.score == 0.0
+
+def _doc_labelled(*documents: str) -> EvaluationSample:
+    return EvaluationSample(
+        query_id="q1", query="test", relevant_documents=list(documents), relevant_chunks=[]
+    )
+
+
+def _unlabelled() -> EvaluationSample:
+    return EvaluationSample(query_id="q1", query="test", relevant_documents=[], relevant_chunks=[])
+
+
+def _retrieved_from(*documents: str) -> RAGResult:
+    chunks = [_make_chunk("t", f"{doc}:{i}", doc) for i, doc in enumerate(documents)]
+    return RAGResult(query="test", query_id="q1", retrieved_chunks=chunks)
+
+
+def test_context_precision_falls_back_to_document_labels():
+    result = ContextPrecisionEvaluator().evaluate(
+        _doc_labelled("d1"), _retrieved_from("d1", "d2", "d1", "d1", "d3")
+    )
+
+    assert result.score == 0.6
+    assert is_applicable(result)
+    assert "document labels" in result.reason
+
+
+def test_context_recall_falls_back_to_document_labels():
+    result = ContextRecallEvaluator().evaluate(
+        _doc_labelled("d1", "d4"), _retrieved_from("d1", "d2", "d1")
+    )
+
+    assert result.score == 0.5
+    assert is_applicable(result)
+
+
+def test_chunk_labels_take_precedence_over_documents():
+    sample = EvaluationSample(
+        query_id="q1", query="test", relevant_documents=["d1"], relevant_chunks=["d1:0"]
+    )
+    retrieved = _retrieved_from("d1", "d1")
+
+    assert ContextPrecisionEvaluator().evaluate(sample, retrieved).score == 0.5
+    assert ContextRecallEvaluator().evaluate(sample, retrieved).score == 1.0
+
+
+def test_context_metrics_not_applicable_without_labels():
+    retrieved = _retrieved_from("d1")
+
+    precision = ContextPrecisionEvaluator().evaluate(_unlabelled(), retrieved)
+    recall = ContextRecallEvaluator().evaluate(_unlabelled(), retrieved)
+
+    # Previously 0.0 and 1.0 respectively; neither is measurable here.
+    assert not is_applicable(precision)
+    assert not is_applicable(recall)
+
+
+def test_citation_accuracy_falls_back_to_document_labels():
+    citations = [
+        Citation(document_id="d1", chunk_id="d1:0", score=0.9),
+        Citation(document_id="d2", chunk_id="d2:0", score=0.5),
+    ]
+    generation = GenerationResponse(
+        text="Answer", cited_answer=CitedAnswer(text="Answer", citations=citations)
+    )
+    result = RAGResult(query="test", query_id="q1", retrieved_chunks=[], generation=generation)
+
+    evaluated = CitationAccuracyEvaluator().evaluate(_doc_labelled("d1"), result)
+
+    assert evaluated.score == 0.5
+    assert not is_applicable(CitationAccuracyEvaluator().evaluate(_unlabelled(), result))
+
+
+def test_correctness_not_applicable_without_reference_or_generation():
+    generation = GenerationResponse(text="The answer is 42.")
+    with_answer = RAGResult(query="test", query_id="q1", retrieved_chunks=[], generation=generation)
+    no_answer = RAGResult(query="test", query_id="q1", retrieved_chunks=[])
+    referenced = EvaluationSample(
+        query_id="q1", query="test", relevant_documents=[], relevant_chunks=[],
+        reference_answer="The answer is 42.",
+    )
+
+    assert not is_applicable(CorrectnessEvaluator().evaluate(_unlabelled(), with_answer))
+    assert not is_applicable(CorrectnessEvaluator().evaluate(referenced, no_answer))
+    assert CorrectnessEvaluator().evaluate(referenced, with_answer).score == 1.0
+
+
+def test_correctness_wrong_answer_still_scores_zero():
+    sample = EvaluationSample(
+        query_id="q1", query="test", relevant_documents=[], relevant_chunks=[],
+        reference_answer="alpha beta",
+    )
+    generation = GenerationResponse(text="gamma delta")
+    result = RAGResult(query="test", query_id="q1", retrieved_chunks=[], generation=generation)
+
+    evaluated = CorrectnessEvaluator().evaluate(sample, result)
+
+    assert evaluated.score == 0.0
+    assert is_applicable(evaluated)
